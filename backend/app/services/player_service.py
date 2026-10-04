@@ -4,9 +4,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.content.items import STARTER_ITEM_IDS
 from app.models.item import ItemInstance
 from app.models.player import Cat, Currency, Player
-from app.services.item_service import ensure_item_definitions
+from app.services.item_service import ensure_item_definitions, starter_item
 
 
 async def get_or_create_development_player(session: AsyncSession, username: str = "dev-player") -> Player:
@@ -26,15 +27,8 @@ async def get_or_create_development_player(session: AsyncSession, username: str 
             select(ItemInstance.id).where(ItemInstance.owner_id == player.id).limit(1)
         )
         if item_result.scalar_one_or_none() is None:
-            definitions = await ensure_item_definitions(session)
-            starter_items = [
-                ItemInstance(
-                    owner_id=player.id,
-                    item_definition_id=definition.id,
-                    instance_number=1,
-                )
-                for definition in definitions
-            ]
+            await ensure_item_definitions(session)
+            starter_items = [starter_item(item_id, player.id) for item_id in STARTER_ITEM_IDS]
             session.add_all(starter_items)
             await session.flush()
         return player
@@ -47,15 +41,8 @@ async def get_or_create_development_player(session: AsyncSession, username: str 
 
     session.add(player)
     await session.flush()
-    definitions = await ensure_item_definitions(session)
-    starter_items = [
-        ItemInstance(
-            owner_id=player.id,
-            item_definition_id=definition.id,
-            instance_number=1,
-        )
-        for definition in definitions
-    ]
+    await ensure_item_definitions(session)
+    starter_items = [starter_item(item_id, player.id) for item_id in STARTER_ITEM_IDS]
     session.add_all(starter_items)
     await session.flush()
     await session.refresh(player, attribute_names=["cats", "currencies"])

@@ -4,10 +4,11 @@ import random
 import secrets
 from fractions import Fraction
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.content.items import ITEM_TEMPLATES, roll_modifiers
 from app.models.battle import Battle, BattleEvent, Enemy, Reward
 from app.models.item import ItemDefinition, ItemInstance
 from app.models.player import Currency, Player
@@ -97,9 +98,9 @@ async def create_pve_battle(
     cat = player.cats[0]
     equipped_items = [item for item in player.items if item.equipped_cat_id == cat.id]
     modifiers = {
-        "attack": sum(item.definition.modifiers.get("attack", 0) for item in equipped_items),
-        "defense": sum(item.definition.modifiers.get("defense", 0) for item in equipped_items),
-        "speed": sum(item.definition.modifiers.get("speed", 0) for item in equipped_items),
+        "attack": sum(item.modifiers.get("attack", 0) for item in equipped_items),
+        "defense": sum(item.modifiers.get("defense", 0) for item in equipped_items),
+        "speed": sum(item.modifiers.get("speed", 0) for item in equipped_items),
     }
     player_snapshot = {
         "name": cat.name,
@@ -165,16 +166,49 @@ async def create_reward(
     drop = random.Random(seed ^ stage).random() < min(0.15 + (stage // 5) * 0.05, 0.5)
     item_instance_id = None
     if drop:
-        definitions_result = await session.execute(select(ItemDefinition).order_by(ItemDefinition.rarity, ItemDefinition.id))
+        catalog_ids = [template["id"] for template in ITEM_TEMPLATES]
+        definitions_result = await session.execute(
+            select(ItemDefinition)
+            .where(ItemDefinition.id.in_(catalog_ids))
+            .order_by(ItemDefinition.rarity, ItemDefinition.id)
+        )
         definitions = list(definitions_result.scalars().all())
         if definitions:
-            rare_chance = min(0.1 + (stage // 5) * 0.1, 0.6)
-            rare = random.Random(seed ^ (stage * 17)).random() < rare_chance
-            eligible = [item for item in definitions if item.rarity == ("rare" if rare else "common")]
+            rarity_roll = random.Random(seed ^ (stage * 17)).random()
+            if stage >= 20:
+                rarity = "legendary" if rarity_roll < 0.02 else "epic" if rarity_roll < 0.15 else "rare" if rarity_roll < 0.45 else "common"
+            elif stage >= 10:
+                rarity = "epic" if rarity_roll < 0.15 else "rare" if rarity_roll < 0.5 else "common"
+            elif stage >= 5:
+                rarity = "rare" if rarity_roll < 0.35 else "common"
+            else:
+                rarity = "common"
+            eligible = [item for item in definitions if item.rarity == rarity]
             if not eligible:
                 eligible = definitions
             definition = eligible[random.Random(seed ^ (stage * 31)).randrange(len(eligible))]
-            item = ItemInstance(owner_id=player.id, item_definition_id=definition.id, instance_number=1)
+            instance_number = await session.scalar(
+                select(func.max(ItemInstance.instance_number)).where(
+                    ItemInstance.owner_id == player.id,
+                    ItemInstance.item_definition_id == definition.id,
+                )
+            )
+            item = ItemInstance(
+                owner_id=player.id,
+                item_definition_id=definition.id,
+                instance_number=(instance_number or 0) + 1,
+                rolled_modifiers=roll_modifiers(
+                    {
+                        "primary_stat": definition.primary_stat,
+                        "primary_min": definition.primary_min,
+                        "primary_max": definition.primary_max,
+                        "bonus_stat_count": definition.bonus_stat_count,
+                        "bonus_min": definition.bonus_min,
+                        "bonus_max": definition.bonus_max,
+                    },
+                    seed ^ (stage * 47),
+                ),
+            )
             session.add(item)
             await session.flush()
             item_instance_id = item.id
@@ -285,7 +319,12 @@ async def get_battle(session: AsyncSession, battle_id: str) -> Battle | None:
 async def get_player_battles(session: AsyncSession, player_id: str) -> list[Battle]:
     result = await session.execute(
         select(Battle)
-        .options(selectinload(Battle.events), selectinload(Battle.reward))
+        .options(
+            selectinload(Battle.events),
+            selectinload(Battle.reward).selectinload(Reward.item_instance).selectinload(
+                ItemInstance.definition
+            ),
+        )
         .where(Battle.player_id == player_id)
         .order_by(Battle.created_at.desc())
     )

@@ -27,6 +27,11 @@ and the current enemy/NPC visible without navigating between separate screens.
 The first visual implementation uses CSS/Canvas placeholders; real transparent
 pixel-art layers can replace them later without changing item ownership.
 
+Players can equip one item in each slot. The initial content catalog has two
+item archetypes per slot, and every archetype is available in common, rare,
+epic, and legendary variants. Each item rolls its own primary stat; higher
+rarities add independent bonus stat rolls.
+
 Players can equip one item in each slot:
 
 - **Head** — helmets, hats, crowns, and other visual modifiers
@@ -113,6 +118,9 @@ animations. Gear is composited in a fixed order:
 ```text
 base cat → body → accessory → head → weapon
 ```
+
+This equipment composition applies only to the player's cat. Enemy visuals are
+standalone sprites without equipment overlays.
 
 ## Technology
 

@@ -6,7 +6,7 @@ import {
   getInventory,
   unequipItem,
 } from "../api/gameApi";
-import { renderGlyph } from "../rendering/placeholders";
+import { renderCat, renderGlyph } from "../rendering/placeholders";
 import { getEquippedItemsForCat, SLOT_ORDER, sumBonusForStat } from "../state/playerState";
 import type {
   BattleRead,
@@ -22,6 +22,10 @@ const STAT_ORDER: Array<{ key: StatKey; label: string }> = [
   { key: "defense", label: "DEF" },
   { key: "speed", label: "SPD" },
 ];
+
+function rarityClass(rarity: ItemInstanceRead["definition"]["rarity"]): string {
+  return `rarity-${rarity}`;
+}
 
 export function mountDashboard(root: HTMLElement): void {
   root.innerHTML = `
@@ -50,16 +54,28 @@ export function mountDashboard(root: HTMLElement): void {
               <span class="eyebrow">YOUR CAT</span>
               <h3 id="cat-name">Mochi</h3>
             </div>
-            <div class="cat-avatar" aria-hidden="true">ฅ^•ﻌ•^ฅ</div>
+            <div class="fighter-core">
+              <div class="fighter-health fighter-health-player">
+                <span>YOU</span>
+                <progress id="player-hp" max="100" value="100"></progress>
+              </div>
+              <div class="cat-avatar" aria-hidden="true">${renderCat()}</div>
+            </div>
           </div>
           <div class="versus-badge">VS</div>
           <div class="fighter fighter-enemy">
+            <div class="fighter-core">
+              <div class="fighter-health fighter-health-enemy">
+                <span>ENEMY</span>
+                <progress id="enemy-hp" max="100" value="100"></progress>
+              </div>
+              <div class="enemy-body" aria-hidden="true">${renderCat(true)}</div>
+            </div>
             <div class="fighter-label">
               <span class="eyebrow">OPPONENT</span>
               <h3 id="enemy-name">Loading enemy…</h3>
               <select id="enemy-selector" class="enemy-selector" aria-label="Choose defeated enemy"></select>
             </div>
-            <div class="enemy-body" aria-hidden="true">ฅ◉ﻌ◉ฅ</div>
           </div>
         </div>
         <div class="battle-controls">
@@ -68,12 +84,10 @@ export function mountDashboard(root: HTMLElement): void {
             <li id="enemy-defense">DEF --</li>
             <li id="enemy-speed">SPD --</li>
           </ul>
-          <div class="health-bars" aria-live="polite">
-            <div><span>YOU</span><progress id="player-hp" max="100" value="100"></progress></div>
-            <div><span>ENEMY</span><progress id="enemy-hp" max="100" value="100"></progress></div>
+          <div class="battle-action">
+            <button type="button" class="primary-button fight-button" data-action="fight">Fight</button>
+            <button type="button" class="ghost-button skip-button" data-action="skip-battle" hidden>Skip to result</button>
           </div>
-          <button type="button" class="primary-button fight-button" data-action="fight">Fight</button>
-          <button type="button" class="ghost-button skip-button" data-action="skip-battle" hidden>Skip to result</button>
           <div id="battle-playout" class="battle-playout" aria-live="polite"></div>
           <div id="battle-result" class="battle-result" aria-live="polite"></div>
           <div id="battle-reward" class="battle-reward" aria-live="polite"></div>
@@ -92,7 +106,7 @@ export function mountDashboard(root: HTMLElement): void {
 
           <div class="cat-loadout">
             <div class="cat-stage" aria-label="Cat preview area">
-              <div class="cat-avatar" aria-hidden="true">ฅ^•ﻌ•^ฅ</div>
+              <div class="cat-avatar" aria-hidden="true">${renderCat()}</div>
               <div class="stat-grid" id="stat-grid"></div>
             </div>
             <div class="equipment-column">
@@ -309,6 +323,10 @@ function renderPlayerView(
 
   renderEquipmentSlots(root, equippedItems, pendingActionId);
   renderInventoryList(root, player.id, cat, inventory, pendingActionId);
+  const catAvatar = root.querySelector<HTMLElement>(".cat-stage .cat-avatar");
+  if (catAvatar) {
+    catAvatar.innerHTML = renderCat(false, equippedItems.map((item) => item.definition.visual_key));
+  }
 }
 
 function renderEnemySelector(root: HTMLElement, progress: EnemyProgressRead): void {
@@ -332,8 +350,14 @@ function createBattlePlayback(root: HTMLElement, battle: BattleRead): {
   let timer: number | undefined;
   let skipped = false;
 
-  if (playerHp) playerHp.value = battle.player_snapshot.max_hp;
-  if (enemyHp) enemyHp.value = battle.enemy_snapshot.max_hp;
+  if (playerHp) {
+    playerHp.max = battle.player_snapshot.max_hp;
+    playerHp.value = battle.player_snapshot.max_hp;
+  }
+  if (enemyHp) {
+    enemyHp.max = battle.enemy_snapshot.max_hp;
+    enemyHp.value = battle.enemy_snapshot.max_hp;
+  }
   if (playout) playout.textContent = "Battle started…";
   if (skipButton) skipButton.hidden = false;
 
@@ -358,6 +382,9 @@ function createBattlePlayback(root: HTMLElement, battle: BattleRead): {
       const event = battle.events[index++];
       if (playerHp) playerHp.value = event.player_hp;
       if (enemyHp) enemyHp.value = event.enemy_hp;
+      if (event.event_type === "attack" && event.attacker) {
+        triggerAttackAnimation(root, event.attacker);
+      }
       if (playout) {
         playout.textContent = event.event_type === "attack"
           ? `${event.attacker === "player" ? "Mochi" : battle.enemy_snapshot.name} attacks for ${event.damage}!`
@@ -375,6 +402,18 @@ function createBattlePlayback(root: HTMLElement, battle: BattleRead): {
       finish();
     },
   };
+}
+
+function triggerAttackAnimation(root: HTMLElement, attacker: "player" | "enemy"): void {
+  const selector = attacker === "player"
+    ? ".fighter-player .cat-avatar"
+    : ".fighter-enemy .enemy-body";
+  const sprite = root.querySelector<HTMLElement>(selector);
+  if (!sprite) return;
+
+  sprite.classList.remove("attack-lunge");
+  void sprite.offsetWidth;
+  sprite.classList.add("attack-lunge");
 }
 
 function renderEquipmentSlots(
@@ -409,10 +448,9 @@ function renderEquipmentSlots(
       <div class="equipment-slot">
         <div class="equipment-headline">
           <span>${labelText}</span>
-          <span class="slot-badge">${item?.definition.rarity ?? "empty"}</span>
         </div>
         <div class="equipment-visual">${item ? renderGlyph(item.definition.visual_key) : "□"}</div>
-        <strong>${itemName}</strong>
+        <strong class="${item ? rarityClass(item.definition.rarity) : ""}">${itemName}</strong>
         ${buttonMarkup}
       </div>
     `;
@@ -451,18 +489,18 @@ function renderInventoryList(
     const action = isEquipped ? "unequip" : "equip";
 
     return `
-      <article class="inventory-card">
+      <article class="inventory-card ${rarityClass(item.definition.rarity)}">
         <div class="inventory-card-top">
           <div class="mini-visual">${renderGlyph(item.definition.visual_key)}</div>
           <div>
-            <strong>${item.definition.name}</strong>
-            <span>${item.definition.slot} • ${item.definition.rarity}</span>
+            <strong class="${rarityClass(item.definition.rarity)}">${item.definition.name}</strong>
+            <span>${item.definition.slot}</span>
           </div>
         </div>
         <div class="inventory-card-meta">
-          <small>ATK ${item.definition.modifiers.attack || 0}</small>
-          <small>DEF ${item.definition.modifiers.defense || 0}</small>
-          <small>SPD ${item.definition.modifiers.speed || 0}</small>
+          <small>ATK ${item.modifiers.attack || 0}</small>
+          <small>DEF ${item.modifiers.defense || 0}</small>
+          <small>SPD ${item.modifiers.speed || 0}</small>
         </div>
         <button
           type="button"
@@ -513,8 +551,11 @@ function showBattleReward(root: HTMLElement, battle: BattleRead): void {
 
 function setFightButtonState(root: HTMLElement, pending: boolean): void {
   const fightButton = root.querySelector<HTMLButtonElement>('[data-action="fight"]');
-  if (!fightButton) return;
+  const skipButton = root.querySelector<HTMLButtonElement>('[data-action="skip-battle"]');
+  if (!fightButton || !skipButton) return;
 
   fightButton.disabled = pending;
   fightButton.textContent = pending ? "Fighting…" : "Fight";
+  fightButton.hidden = pending;
+  skipButton.hidden = !pending;
 }

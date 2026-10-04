@@ -11,9 +11,15 @@ export interface ItemDefinitionRead {
   id: string;
   name: string;
   slot: SlotKey;
-  rarity: "common" | "rare";
+  rarity: "common" | "rare" | "epic" | "legendary";
   visual_key: string;
   modifiers: StatModifiers;
+  primary_stat: StatKey;
+  primary_min: number;
+  primary_max: number;
+  bonus_stat_count: number;
+  bonus_min: number;
+  bonus_max: number;
   created_at: string;
 }
 
@@ -23,6 +29,7 @@ export interface ItemInstanceRead {
   item_definition_id: string;
   equipped_cat_id: string | null;
   created_at: string;
+  modifiers: StatModifiers;
   definition: ItemDefinitionRead;
 }
 

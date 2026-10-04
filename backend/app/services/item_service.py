@@ -4,58 +4,48 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.content.items import ITEM_TEMPLATES
 from app.models.item import ItemDefinition, ItemInstance
 from app.models.player import Cat
-
-ITEM_DEFINITIONS = (
-    {
-        "id": "woven-cap",
-        "name": "Woven Cap",
-        "slot": "head",
-        "rarity": "common",
-        "visual_key": "woven-cap",
-        "modifiers": {"speed": 1},
-    },
-    {
-        "id": "copper-vest",
-        "name": "Copper Vest",
-        "slot": "body",
-        "rarity": "common",
-        "visual_key": "copper-vest",
-        "modifiers": {"defense": 2},
-    },
-    {
-        "id": "pixel-sword",
-        "name": "Pixel Sword",
-        "slot": "weapon",
-        "rarity": "common",
-        "visual_key": "pixel-sword",
-        "modifiers": {"attack": 3},
-    },
-    {
-        "id": "lucky-charm",
-        "name": "Lucky Charm",
-        "slot": "accessory",
-        "rarity": "rare",
-        "visual_key": "lucky-charm",
-        "modifiers": {"attack": 1, "speed": 1},
-    },
-)
 
 
 async def ensure_item_definitions(session: AsyncSession) -> list[ItemDefinition]:
     result = await session.execute(select(ItemDefinition))
     definitions = {definition.id: definition for definition in result.scalars().all()}
     missing = [
-        ItemDefinition(**definition)
-        for definition in ITEM_DEFINITIONS
+        ItemDefinition(modifiers={}, **definition)
+        for definition in ITEM_TEMPLATES
         if definition["id"] not in definitions
     ]
+    for template in ITEM_TEMPLATES:
+        definition = definitions.get(template["id"])
+        if definition is not None:
+            for field in (
+                "name", "slot", "rarity", "visual_key", "primary_stat", "primary_min",
+                "primary_max", "bonus_stat_count", "bonus_min", "bonus_max",
+            ):
+                setattr(definition, field, template[field])
     if missing:
         session.add_all(missing)
         await session.flush()
         definitions.update({definition.id: definition for definition in missing})
-    return [definitions[item["id"]] for item in ITEM_DEFINITIONS]
+    return [definitions[item["id"]] for item in ITEM_TEMPLATES]
+
+
+def starter_item(item_id: str, player_id: str) -> ItemInstance:
+    template = next(item for item in ITEM_TEMPLATES if item["id"] == item_id)
+    starter_rolls = {
+        "bunny-ears-common": {"speed": 1},
+        "leather-armor-common": {"defense": 2},
+        "claw-gloves-common": {"attack": 3},
+        "bell-collar-common": {"speed": 1},
+    }
+    return ItemInstance(
+        owner_id=player_id,
+        item_definition_id=template["id"],
+        instance_number=1,
+        rolled_modifiers=starter_rolls[item_id],
+    )
 
 
 async def get_player_items(session: AsyncSession, player_id: str) -> list[ItemInstance]:

@@ -59,6 +59,8 @@ Before adding content, preserve these extension boundaries:
   fields through routes, combat, and UI.
 - Keep cats, enemies, and items data-driven; isolate exceptional behavior in
   abilities or strategies rather than type checks throughout the codebase.
+- Equipment composition is player-only for the MVP. Enemy sprites are standalone
+  visuals and do not receive item overlays.
 - Keep route handlers and UI screens thin; put rules in backend services and
   presentation state in frontend modules.
 
@@ -168,6 +170,13 @@ Completed: item definitions/instances, four slots, structured stat modifiers,
 starter gear, ownership validation, one equipped item per slot, and the
 single-page dashboard with inventory, equipment, stat overlays, placeholder
 visuals, and loading/error/pending states.
+
+The first content pass is now also prepared: two item archetypes per slot, with
+each archetype available in common, rare, epic, and legendary variants. The
+catalog has a rarity balance matrix, deterministic primary/bonus stat rolls,
+and persisted instance modifiers. Common starter rolls remain small and fixed
+for the documented opening build; reward drops unlock higher rarity bands at
+stages 5, 10, and 20.
 
 ### Frontend product assumptions
 
