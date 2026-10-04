@@ -51,6 +51,17 @@ async def get_current_enemy(session: AsyncSession, player_id: str) -> Enemy | No
     return await session.get(Enemy, player.current_enemy_id)
 
 
+async def get_enemy_progress(session: AsyncSession, player_id: str) -> tuple[int, Enemy, list[Enemy]] | None:
+    player = await session.get(Player, player_id, with_for_update=True)
+    if player is None:
+        return None
+    current = await get_current_enemy(session, player_id)
+    if current is None:
+        return None
+    enemies = [await ensure_enemy(session, stage) for stage in range(1, player.highest_unlocked_stage + 1)]
+    return player.highest_unlocked_stage, current, enemies
+
+
 async def create_pve_battle(
     session: AsyncSession,
     player_id: str,
@@ -262,7 +273,30 @@ def resolve_battle(
 async def get_battle(session: AsyncSession, battle_id: str) -> Battle | None:
     result = await session.execute(
         select(Battle)
-        .options(selectinload(Battle.events), selectinload(Battle.reward))
+        .options(
+            selectinload(Battle.events),
+            selectinload(Battle.reward).selectinload(Reward.item_instance).selectinload(ItemInstance.definition),
+        )
         .where(Battle.id == battle_id)
     )
     return result.scalar_one_or_none()
+
+
+async def get_player_battles(session: AsyncSession, player_id: str) -> list[Battle]:
+    result = await session.execute(
+        select(Battle)
+        .options(selectinload(Battle.events), selectinload(Battle.reward))
+        .where(Battle.player_id == player_id)
+        .order_by(Battle.created_at.desc())
+    )
+    return list(result.scalars().all())
+
+
+async def get_player_rewards(session: AsyncSession, player_id: str) -> list[Reward]:
+    result = await session.execute(
+        select(Reward)
+        .options(selectinload(Reward.item_instance).selectinload(ItemInstance.definition))
+        .where(Reward.player_id == player_id)
+        .order_by(Reward.created_at.desc())
+    )
+    return list(result.scalars().all())

@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.item import ItemInstanceRead
+
 
 class PveBattleCreate(BaseModel):
     player_id: str = Field(min_length=1)
@@ -13,6 +15,7 @@ class PveBattleCreate(BaseModel):
 
 class EnemyRead(BaseModel):
     id: str
+    stage: int
     name: str
     visual_key: str
     attack: int
@@ -67,6 +70,17 @@ class RewardRead(BaseModel):
     player_id: str
     currency_amount: int
     item_instance_id: str | None
+    item_instance: ItemInstanceRead | None = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class EnemyProgressRead(BaseModel):
+    highest_unlocked_stage: int
+    selected_stage: int
+    enemies: list[EnemyRead]
+
+
+class RewardHistoryRead(RewardRead):
+    pass

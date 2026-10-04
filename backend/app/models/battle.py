@@ -105,3 +105,4 @@ class Reward(Base):
     )
 
     battle: Mapped[Battle] = relationship(back_populates="reward")
+    item_instance: Mapped["ItemInstance | None"] = relationship()

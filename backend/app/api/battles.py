@@ -6,8 +6,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
-from app.schemas.battle import BattleRead, EnemyRead, PveBattleCreate
-from app.services.battle_service import create_pve_battle, get_battle, get_current_enemy
+from app.schemas.battle import BattleRead, EnemyProgressRead, EnemyRead, PveBattleCreate, RewardRead
+from app.services.battle_service import (
+    create_pve_battle,
+    get_battle,
+    get_current_enemy,
+    get_enemy_progress,
+)
 
 router = APIRouter(prefix="/battles", tags=["battles"])
 
@@ -24,7 +29,8 @@ async def create_pve(
             detail="player or cat not found",
         )
     await session.commit()
-    return BattleRead.model_validate(battle)
+    saved_battle = await get_battle(session, battle.id)
+    return BattleRead.model_validate(saved_battle or battle)
 
 
 @router.get("/pve/current/{player_id}", response_model=EnemyRead)
@@ -39,6 +45,22 @@ async def read_current_enemy(
     return EnemyRead.model_validate(enemy)
 
 
+@router.get("/pve/enemies/{player_id}", response_model=EnemyProgressRead)
+async def read_enemy_progress(
+    player_id: str,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> EnemyProgressRead:
+    progress = await get_enemy_progress(session, player_id)
+    if progress is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="player not found")
+    highest_stage, selected_enemy, enemies = progress
+    return EnemyProgressRead(
+        highest_unlocked_stage=highest_stage,
+        selected_stage=selected_enemy.stage,
+        enemies=[EnemyRead.model_validate(enemy) for enemy in enemies],
+    )
+
+
 @router.get("/{battle_id}", response_model=BattleRead)
 async def read_battle(
     battle_id: str,
@@ -48,3 +70,25 @@ async def read_battle(
     if battle is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="battle not found")
     return BattleRead.model_validate(battle)
+
+
+@router.get("/players/{player_id}/history", response_model=list[BattleRead])
+async def read_player_battle_history(
+    player_id: str,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> list[BattleRead]:
+    from app.services.battle_service import get_player_battles
+
+    battles = await get_player_battles(session, player_id)
+    return [BattleRead.model_validate(battle) for battle in battles]
+
+
+@router.get("/players/{player_id}/rewards", response_model=list[RewardRead])
+async def read_player_rewards(
+    player_id: str,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> list[RewardRead]:
+    from app.services.battle_service import get_player_rewards
+
+    rewards = await get_player_rewards(session, player_id)
+    return [RewardRead.model_validate(reward) for reward in rewards]
