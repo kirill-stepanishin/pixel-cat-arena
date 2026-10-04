@@ -30,6 +30,7 @@ export interface ItemInstanceRead {
   equipped_cat_id: string | null;
   created_at: string;
   modifiers: StatModifiers;
+  sell_price: number;
   definition: ItemDefinitionRead;
 }
 
@@ -165,4 +166,11 @@ export interface ListingRead {
   created_at: string;
   closed_at: string | null;
   item: ItemInstanceRead;
+}
+
+export interface SaleResult {
+  item_id: string;
+  item_name: string;
+  price: number;
+  balance: number;
 }

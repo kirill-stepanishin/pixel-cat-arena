@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.content.items import ITEM_TEMPLATES
+from app.content.items import ITEM_TEMPLATES, sell_value
+from app.models.battle import Reward
 from app.models.item import ItemDefinition, ItemInstance
 from app.models.marketplace import MarketplaceListing
-from app.models.player import Cat
+from app.models.player import Cat, Currency
 
 
 class ItemListedError(Exception):
@@ -135,3 +136,48 @@ async def unequip_item(
     item.equipped_cat_id = None
     await session.flush()
     return item
+
+
+class ItemSaleError(Exception):
+    def __init__(self, detail: str, status_code: int) -> None:
+        super().__init__(detail)
+        self.detail = detail
+        self.status_code = status_code
+
+
+async def sell_item(session: AsyncSession, player_id: str, item_id: str) -> tuple[ItemInstance, int, int]:
+    item = (
+        await session.execute(
+            select(ItemInstance)
+            .options(selectinload(ItemInstance.definition))
+            .where(ItemInstance.id == item_id, ItemInstance.owner_id == player_id)
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if item is None:
+        raise ItemSaleError("owned item not found", 404)
+    if item.equipped_cat_id is not None:
+        raise ItemSaleError("unequip the item before selling it", 409)
+    if await session.scalar(
+        select(MarketplaceListing.id).where(
+            MarketplaceListing.item_instance_id == item.id,
+            MarketplaceListing.status == "active",
+        )
+    ):
+        raise ItemSaleError("cancel the marketplace listing before selling this item", 409)
+
+    price = sell_value(item.definition.rarity, sum(item.modifiers.values()))
+    currency = (
+        await session.execute(
+            select(Currency)
+            .where(Currency.player_id == player_id, Currency.currency_type == "coins")
+            .with_for_update()
+        )
+    ).scalar_one()
+    currency.balance += price
+
+    await session.execute(delete(MarketplaceListing).where(MarketplaceListing.item_instance_id == item.id))
+    await session.execute(update(Reward).where(Reward.item_instance_id == item.id).values(item_instance_id=None))
+    await session.delete(item)
+    await session.flush()
+    return item, price, currency.balance

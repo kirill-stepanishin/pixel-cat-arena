@@ -22,7 +22,7 @@ of scope for this milestone.
 - [x] Deterministic server-authoritative PvE
 - [x] Persistent battle events, rewards, and enemy progression
 - [x] Accounts and authenticated sessions (registration/login/session foundation)
-- [ ] Instant item selling
+- [x] Instant item selling
 - [x] Fixed-price marketplace
 - [x] Asynchronous PvP (published builds, challenges, deterministic matches, and replay UI)
 - [ ] Local two-player smoke test

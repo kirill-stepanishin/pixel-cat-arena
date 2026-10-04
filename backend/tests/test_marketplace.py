@@ -125,3 +125,23 @@ def test_cancel_and_insufficient_funds(monkeypatch) -> None:
 def test_marketplace_requires_authentication(monkeypatch) -> None:
     monkeypatch.setattr(db, "session_factory", _build_session_factory())
     assert TestClient(app).get("/marketplace/listings").status_code == 401
+
+
+def test_instant_sell_rules(monkeypatch) -> None:
+    monkeypatch.setattr(db, "session_factory", _build_session_factory())
+    client, player = _register("seller")
+    items = client.get(f"/players/{player['id']}/items").json()
+    head = next(i for i in items if i["definition"]["slot"] == "head")
+    assert head["sell_price"] == sum(head["modifiers"].values())
+
+    cat_id = client.get(f"/players/{player['id']}").json()["cats"][0]["id"]
+    client.post(f"/players/{player['id']}/cats/{cat_id}/items/{head['id']}/equip")
+    assert client.post(f"/players/items/{head['id']}/sell").status_code == 409
+    client.post(f"/players/{player['id']}/cats/{cat_id}/items/{head['id']}/unequip")
+
+    sold = client.post(f"/players/items/{head['id']}/sell")
+    assert sold.status_code == 200
+    assert sold.json()["balance"] == 125 + head["sell_price"]
+    assert client.post(f"/players/items/{head['id']}/sell").status_code == 404
+    remaining = client.get(f"/players/{player['id']}/items").json()
+    assert head["id"] not in [i["id"] for i in remaining]

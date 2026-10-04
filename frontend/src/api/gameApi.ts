@@ -9,6 +9,7 @@ import type {
   PvpMatchRead,
   PvpChallengeRead,
   ListingRead,
+  SaleResult,
 } from "../types";
 
 const STORAGE_KEY = "pixel-cat-arena:player-id";
@@ -124,4 +125,8 @@ export function cancelListing(listingId: string): Promise<ListingRead> {
 
 export function purchaseListing(listingId: string): Promise<ListingRead> {
   return apiFetch<ListingRead>(`/marketplace/listings/${listingId}/purchase`, { method: "POST" });
+}
+
+export function sellItem(itemId: string): Promise<SaleResult> {
+  return apiFetch<SaleResult>(`/players/items/${itemId}/sell`, { method: "POST" });
 }

@@ -10,6 +10,7 @@ import {
 } from "../api/gameApi";
 import { getCurrentPlayer, logout } from "../api/authApi";
 import { getListedItem, marketplaceMarkup, mountMarketplace, refreshMarketplace, refreshMyListings } from "./marketplace";
+import { escapeHtml, initTooltips, itemTip, slotIcon, statChips, tipAttr, toast, uiContext } from "./ui";
 import { renderCat } from "../rendering/placeholders";
 import { getEquippedItemsForCat, SLOT_ORDER, sumBonusForStat } from "../state/playerState";
 import type {
@@ -162,7 +163,19 @@ export function mountDashboard(root: HTMLElement): void {
             <div class="panel-header compact">
               <div>
                 <p class="eyebrow">INVENTORY</p>
-                <h3>Backpack</h3>
+                <h3>Backpack <span class="count-pill" id="inventory-count"></span></h3>
+              </div>
+              <div class="toolbar">
+                <select id="inventory-slot" aria-label="Filter by slot">
+                  <option value="">All slots</option>
+                  <option value="head">Head</option><option value="body">Body</option>
+                  <option value="weapon">Weapon</option><option value="accessory">Accessory</option>
+                </select>
+                <select id="inventory-sort" aria-label="Sort items">
+                  <option value="rarity">Best rarity</option><option value="attack">Attack</option>
+                  <option value="defense">Defense</option><option value="speed">Speed</option>
+                  <option value="value">Sell value</option>
+                </select>
               </div>
             </div>
             <div id="inventory-list" class="inventory-list"></div>
@@ -267,7 +280,7 @@ export function mountDashboard(root: HTMLElement): void {
       await refreshDashboard(root, null);
     } catch (error) {
       pendingActionId = null;
-      showError(root, error instanceof Error ? error.message : "Could not update equipment.");
+      toast(error instanceof Error ? error.message : "Could not update equipment.", "error");
       await refreshDashboard(root, null);
     }
   });
@@ -280,6 +293,14 @@ export function mountDashboard(root: HTMLElement): void {
   root.querySelector("#challenge-player")?.addEventListener("click", () => void pvpAction(root, "challenge", (skip) => { skipPlayback = skip; }));
   root.querySelector("#resolve-challenge")?.addEventListener("click", () => void pvpAction(root, "resolve", (skip) => { skipPlayback = skip; }));
 
+  initTooltips();
+  root.addEventListener("change", (event) => {
+    const target = event.target as HTMLSelectElement;
+    if (target.id === "inventory-slot") inventoryView.slot = target.value;
+    else if (target.id === "inventory-sort") inventoryView.sort = target.value;
+    else return;
+    rerenderInventory();
+  });
   mountMarketplace(root, () => refreshDashboard(root, null));
   void refreshDashboard(root, null).then(() => refreshMarketplace(root));
 }
@@ -449,8 +470,14 @@ function renderPlayerView(
   }
 
   if (coinsBadge) {
+    const changed = uiContext.balance !== money && coinsBadge.textContent !== "Coins: --";
     coinsBadge.textContent = `Coins: ${money}`;
+    if (changed) bumpCoins(root);
   }
+  uiContext.balance = money;
+  uiContext.equippedBySlot = new Map(
+    inventory.filter((item) => cat && item.equipped_cat_id === cat.id).map((item) => [item.definition.slot, item]),
+  );
 
   if (!cat) {
     if (statGrid) {
@@ -615,48 +642,52 @@ function renderEquipmentSlots(
     return;
   }
 
-  const itemBySlot = new Map<SlotKey, ItemInstanceRead | undefined>();
-  SLOT_ORDER.forEach((slot) => {
-    itemBySlot.set(slot, equippedItems.find((item) => item.definition.slot === slot));
-  });
-
   equipmentSlotsElement.innerHTML = SLOT_ORDER.map((slot) => {
-    const item = itemBySlot.get(slot);
-    const itemName = item?.definition.name ?? "Empty slot";
-    const labelText = item ? item.definition.slot.toUpperCase() : slot.toUpperCase();
-    const buttonMarkup = item
-      ? `
-        <button type="button" class="ghost-button" data-action="unequip" data-item-id="${item.id}" data-player-id="${item.owner_id}" data-cat-id="${item.equipped_cat_id ?? ""}">
-          ${pendingActionId === item.id ? "Updating…" : "Unequip"}
-        </button>
-      `
-      : `<span class="empty-slot">No gear equipped</span>`;
+    const item = equippedItems.find((candidate) => candidate.definition.slot === slot);
+    const icon = slotIcon(slot);
+
+    if (!item) {
+      return `
+        <div class="equipment-slot is-empty">
+          <div class="equipment-headline"><span>${icon} ${slot.toUpperCase()}</span></div>
+          <span class="empty-slot">Empty — equip gear from your backpack</span>
+        </div>`;
+    }
 
     return `
-      <div class="equipment-slot">
+      <div class="equipment-slot" ${tipAttr(itemTip(item))}>
         <div class="equipment-headline">
-          <span>${labelText}</span>
+          <span>${icon} ${slot.toUpperCase()}</span>
+          <span class="item-rarity ${rarityClass(item.definition.rarity)}">${item.definition.rarity}</span>
         </div>
-        <strong class="${item ? rarityClass(item.definition.rarity) : ""}">${itemName}</strong>
-        ${item ? `<span class="item-rarity ${rarityClass(item.definition.rarity)}">${item.definition.rarity}</span>` : ""}
-        ${item ? `<div class="equipment-modifiers">${formatItemModifiers(item)}</div>` : ""}
-        ${buttonMarkup}
-      </div>
-    `;
+        <strong class="${rarityClass(item.definition.rarity)}">${escapeHtml(item.definition.name)}</strong>
+        <div class="stat-chips">${statChips(item)}</div>
+        <button type="button" class="ghost-button" data-action="unequip" data-item-id="${item.id}" data-player-id="${item.owner_id}" data-cat-id="${item.equipped_cat_id ?? ""}" ${pendingActionId === item.id ? "disabled" : ""}>
+          ${pendingActionId === item.id ? "Updating…" : "Unequip"}
+        </button>
+      </div>`;
   }).join("");
 }
 
-function formatItemModifiers(item: ItemInstanceRead): string {
-  const modifiers: Array<[string, number]> = [
-    ["ATK", item.modifiers.attack],
-    ["DEF", item.modifiers.defense],
-    ["SPD", item.modifiers.speed],
-  ];
+const RARITY_ORDER = { common: 0, rare: 1, epic: 2, legendary: 3 };
+const inventoryView = { slot: "", sort: "rarity" };
+let lastInventory: Parameters<typeof renderInventoryList> | null = null;
 
-  return modifiers
-    .filter(([, value]) => value !== 0)
-    .map(([label, value]) => `${label} ${value > 0 ? "+" : ""}${value}`)
-    .join(" · ") || "No stat bonus";
+function sortItems(items: ItemInstanceRead[]): ItemInstanceRead[] {
+  const total = (item: ItemInstanceRead): number => item.modifiers.attack + item.modifiers.defense + item.modifiers.speed;
+  const keys: Record<string, (item: ItemInstanceRead) => number> = {
+    rarity: (item) => RARITY_ORDER[item.definition.rarity] * 1000 + total(item),
+    attack: (item) => item.modifiers.attack,
+    defense: (item) => item.modifiers.defense,
+    speed: (item) => item.modifiers.speed,
+    value: (item) => item.sell_price,
+  };
+  const key = keys[inventoryView.sort] ?? keys.rarity;
+  return [...items].sort((a, b) => key(b) - key(a));
+}
+
+export function rerenderInventory(): void {
+  if (lastInventory) renderInventoryList(...lastInventory);
 }
 
 function renderInventoryList(
@@ -666,68 +697,69 @@ function renderInventoryList(
   inventory: ItemInstanceRead[],
   pendingActionId: string | null,
 ): void {
+  lastInventory = [root, playerId, cat, inventory, pendingActionId];
   const inventoryList = root.querySelector<HTMLElement>("#inventory-list");
+  const count = root.querySelector<HTMLElement>("#inventory-count");
 
   if (!inventoryList) {
     return;
   }
 
+  const backpack = cat ? inventory.filter((item) => item.equipped_cat_id !== cat.id) : inventory;
+  if (count) count.textContent = `${backpack.length} item${backpack.length === 1 ? "" : "s"}`;
+
   if (!inventory.length) {
-    inventoryList.innerHTML = '<p class="empty-message">No gear in the backpack yet.</p>';
+    inventoryList.innerHTML = '<p class="empty-message">No gear in the backpack yet. Win fights to find some.</p>';
     return;
   }
 
-  const unequippedItems = inventory.filter((item) => !(cat && item.equipped_cat_id === cat.id));
-  const visibleItems = cat ? unequippedItems : inventory;
+  const visibleItems = sortItems(backpack.filter((item) => !inventoryView.slot || item.definition.slot === inventoryView.slot));
 
   if (!visibleItems.length) {
-    inventoryList.innerHTML = '<p class="empty-message">Everything is equipped. Your cat is ready.</p>';
+    inventoryList.innerHTML = `<p class="empty-message">${backpack.length ? "Nothing matches this filter." : "Everything is equipped. Your cat is ready."}</p>`;
     return;
   }
 
   inventoryList.innerHTML = visibleItems.map((item) => {
-    const isEquipped = item.equipped_cat_id === cat?.id;
-    const buttonText = isEquipped ? "Unequip" : "Equip";
-    const action = isEquipped ? "unequip" : "equip";
+    const rarity = rarityClass(item.definition.rarity);
     const listing = getListedItem(item.id);
+    const equipped = uiContext.equippedBySlot.get(item.definition.slot);
+    const pending = pendingActionId === item.id;
+    const actions = listing
+      ? `<span class="listed-badge">Listed · ${listing.price} coins</span>
+         <button type="button" class="ghost-button" data-cancel-listing="${listing.id}">Cancel listing</button>`
+      : `<div class="card-actions" data-when="idle">
+           <button type="button" class="primary-button" data-action="equip" data-item-id="${item.id}" data-player-id="${playerId}" data-cat-id="${cat?.id ?? ""}" ${pending || !cat ? "disabled" : ""}>${pending ? "Updating…" : "Equip"}</button>
+           <button type="button" class="ghost-button" data-card-mode="sell" ${tipAttr(`Sell instantly for <b>${item.sell_price}</b> coins`)}>Sell ${item.sell_price}</button>
+           <button type="button" class="ghost-button" data-card-mode="list" ${tipAttr("List on the marketplace for your own price")}>List</button>
+         </div>
+         <div class="card-sub" data-when="sell">
+           <p>Sell for <b>${item.sell_price}</b> coins?</p>
+           <div class="card-sub-row">
+             <button type="button" class="primary-button" data-sell-confirm data-item-id="${item.id}">Sell</button>
+             <button type="button" class="ghost-button" data-card-mode="">Back</button>
+           </div>
+         </div>
+         <div class="card-sub" data-when="list">
+           <input type="number" min="1" max="1000000" step="1" value="${item.sell_price * 2}" aria-label="Listing price" />
+           <div class="card-sub-row">
+             <button type="button" class="primary-button" data-list-confirm data-item-id="${item.id}">List</button>
+             <button type="button" class="ghost-button" data-card-mode="">Back</button>
+           </div>
+         </div>`;
 
     return `
-      <article class="inventory-card ${rarityClass(item.definition.rarity)}">
+      <article class="inventory-card ${rarity}" data-mode="" ${tipAttr(itemTip(item, equipped ? `<div class="tip-sub">Compared with equipped ${escapeHtml(equipped.definition.name)}</div>` : ""))}>
         <div class="inventory-card-top">
+          <span class="slot-icon">${slotIcon(item.definition.slot)}</span>
           <div>
-            <strong class="${rarityClass(item.definition.rarity)}">${item.definition.name}</strong>
-            <span>${item.definition.slot}</span>
+            <strong class="${rarity}">${escapeHtml(item.definition.name)}</strong>
+            <span>${item.definition.slot} · ${item.definition.rarity}</span>
           </div>
         </div>
-        <span class="item-rarity ${rarityClass(item.definition.rarity)}">${item.definition.rarity}</span>
-        <div class="inventory-card-meta">
-          <small>ATK ${item.modifiers.attack || 0}</small>
-          <small>DEF ${item.modifiers.defense || 0}</small>
-          <small>SPD ${item.modifiers.speed || 0}</small>
-        </div>
-        ${listing ? `<span class="listed-badge">Listed · ${listing.price} coins</span>
-        <button type="button" class="ghost-button" data-cancel-listing="${listing.id}">Cancel listing</button>` : `
-        <div class="card-actions">
-          <button
-            type="button"
-            class="primary-button"
-            data-action="${action}"
-            data-item-id="${item.id}"
-            data-player-id="${playerId}"
-            data-cat-id="${cat?.id ?? ""}"
-            ${pendingActionId === item.id ? "disabled" : ""}
-            ${!cat ? "disabled" : ""}
-          >
-            ${pendingActionId === item.id ? "Updating…" : buttonText}
-          </button>
-          ${isEquipped ? "" : '<button type="button" class="ghost-button" data-list-toggle>List</button>'}
-        </div>
-        <div class="list-row" hidden>
-          <input type="number" min="1" max="1000000" step="1" placeholder="Price" aria-label="Listing price" />
-          <button type="button" class="primary-button" data-list-confirm data-item-id="${item.id}">Confirm</button>
-        </div>`}
-      </article>
-    `;
+        <div class="stat-chips">${statChips(item, equipped)}</div>
+        ${actions}
+      </article>`;
   }).join("");
 }
 
@@ -744,12 +776,6 @@ interface SummaryPlaque {
   label: string;
   value: string;
   count?: number;
-}
-
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (char) => (
-    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char] as string
-  ));
 }
 
 function animateCount(element: HTMLElement, target: number): void {

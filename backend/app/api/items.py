@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_player, require_player
@@ -11,9 +12,11 @@ from app.models.player import Player
 from app.schemas.item import ItemDefinitionRead, ItemInstanceRead
 from app.services.item_service import (
     ItemListedError,
+    ItemSaleError,
     ensure_item_definitions,
     equip_item,
     get_player_items,
+    sell_item,
     unequip_item,
 )
 
@@ -37,6 +40,27 @@ async def get_item_definitions(
     definitions = await ensure_item_definitions(session)
     await session.commit()
     return [ItemDefinitionRead.model_validate(definition) for definition in definitions]
+
+
+class SaleResult(BaseModel):
+    item_id: str
+    item_name: str
+    price: int
+    balance: int
+
+
+@router.post("/items/{item_id}/sell", response_model=SaleResult)
+async def sell_inventory_item(
+    item_id: str,
+    current_player: Annotated[Player, Depends(get_current_player)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> SaleResult:
+    try:
+        item, price, balance = await sell_item(session, current_player.id, item_id)
+    except ItemSaleError as error:
+        raise HTTPException(status_code=error.status_code, detail=error.detail) from error
+    await session.commit()
+    return SaleResult(item_id=item_id, item_name=item.definition.name, price=price, balance=balance)
 
 
 @router.post(

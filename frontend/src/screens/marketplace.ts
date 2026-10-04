@@ -3,9 +3,11 @@ import {
   createListing,
   getListings,
   purchaseListing,
+  sellItem,
   type ListingScope,
 } from "../api/gameApi";
 import type { ListingRead } from "../types";
+import { escapeHtml, itemTip, slotIcon, statChips, tipAttr, toast, uiContext } from "./ui";
 
 const SLOTS = ["head", "body", "weapon", "accessory"];
 const RARITIES = ["common", "rare", "epic", "legendary"];
@@ -18,12 +20,6 @@ let busyId: string | null = null;
 
 export function getListedItem(itemId: string): ListingRead | undefined {
   return myListings.get(itemId);
-}
-
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (char) => (
-    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char] as string
-  ));
 }
 
 export function marketplaceMarkup(): string {
@@ -44,7 +40,7 @@ export function marketplaceMarkup(): string {
       <div class="market-filters">
         <select id="market-slot" aria-label="Filter by slot">${options(SLOTS, "All slots")}</select>
         <select id="market-rarity" aria-label="Filter by rarity">${options(RARITIES, "All rarities")}</select>
-        <p class="market-message" id="market-message" aria-live="polite"></p>
+        <p class="market-hint">Prices are set by players. Arrows compare with your equipped gear.</p>
       </div>
       <div class="market-listings" id="market-listings"></div>
     </section>`;
@@ -54,33 +50,31 @@ function listingCard(listing: ListingRead, mine: boolean): string {
   const { item } = listing;
   const rarity = item.definition.rarity;
   const busy = busyId === listing.id;
+  const equipped = uiContext.equippedBySlot.get(item.definition.slot);
+  const affordable = uiContext.balance >= listing.price;
+  const bargain = listing.price < item.sell_price;
+  const tip = itemTip(item, equipped ? `<div class="tip-sub">Compared with equipped ${escapeHtml(equipped.definition.name)}</div>` : "");
+  const button = mine
+    ? `<button type="button" class="ghost-button" data-market-action="cancel" data-listing-id="${listing.id}" ${busy ? "disabled" : ""}>${busy ? "Working…" : "Cancel"}</button>`
+    : `<button type="button" class="primary-button" data-market-action="buy" data-listing-id="${listing.id}"
+        ${busy || !affordable ? "disabled" : ""} ${affordable ? "" : tipAttr(`Need ${listing.price - uiContext.balance} more coins`)}>
+        ${busy ? "Working…" : "Buy"}</button>`;
   return `
-    <article class="listing-card rarity-card-${rarity}">
-      <div class="listing-head">
-        <strong class="rarity-${rarity}">${escapeHtml(item.definition.name)}</strong>
-        <span>${item.definition.slot} · ${rarity}</span>
+    <article class="listing-card rarity-card-${rarity}" ${tipAttr(tip)}>
+      <div class="inventory-card-top">
+        <span class="slot-icon">${slotIcon(item.definition.slot)}</span>
+        <div>
+          <strong class="rarity-${rarity}">${escapeHtml(item.definition.name)}</strong>
+          <span>${item.definition.slot} · ${rarity}</span>
+        </div>
       </div>
-      <div class="inventory-card-meta">
-        <small>ATK ${item.modifiers.attack || 0}</small>
-        <small>DEF ${item.modifiers.defense || 0}</small>
-        <small>SPD ${item.modifiers.speed || 0}</small>
-      </div>
-      <p class="listing-seller">${mine ? "Your listing" : `by ${escapeHtml(listing.seller_username)}`}</p>
+      <div class="stat-chips">${statChips(item, mine ? undefined : equipped)}</div>
+      <p class="listing-seller">${mine ? "Your listing" : `by ${escapeHtml(listing.seller_username)}`}${bargain && !mine ? ' · <span class="deal">below quick-sell</span>' : ""}</p>
       <div class="listing-foot">
-        <span class="price-tag"><span class="coin-dot" aria-hidden="true"></span>${listing.price}</span>
-        <button type="button" class="${mine ? "ghost-button" : "primary-button"}"
-          data-market-action="${mine ? "cancel" : "buy"}" data-listing-id="${listing.id}" ${busy ? "disabled" : ""}>
-          ${busy ? "Working…" : mine ? "Cancel" : "Buy"}
-        </button>
+        <span class="price-tag ${affordable || mine ? "" : "unaffordable"}"><span class="coin-dot" aria-hidden="true"></span>${listing.price}</span>
+        ${button}
       </div>
     </article>`;
-}
-
-function setMessage(root: HTMLElement, text: string, tone: "ok" | "error" | "" = ""): void {
-  const message = root.querySelector<HTMLElement>("#market-message");
-  if (!message) return;
-  message.textContent = text;
-  message.dataset.tone = tone;
 }
 
 export async function refreshMyListings(): Promise<void> {
@@ -99,7 +93,7 @@ export async function refreshMarketplace(root: HTMLElement): Promise<void> {
       : `<p class="empty-message">${scope === "mine" ? "You have nothing listed. Use List on a backpack item." : "No listings match. Check back soon."}</p>`;
   } catch (error) {
     container.innerHTML = "";
-    setMessage(root, error instanceof Error ? error.message : "Could not load listings.", "error");
+    toast(error instanceof Error ? error.message : "Could not load listings.", "error");
   }
 }
 
@@ -126,38 +120,51 @@ export function mountMarketplace(root: HTMLElement, onInventoryChange: () => Pro
       root.querySelectorAll("[data-market-scope]").forEach((button) => {
         button.classList.toggle("active", button === scopeButton);
       });
-      setMessage(root, "");
-      await refreshMarketplace(root);
+            await refreshMarketplace(root);
       return;
     }
 
-    const openList = target.closest<HTMLButtonElement>("[data-list-toggle]");
-    if (openList) {
-      const row = openList.closest(".inventory-card")?.querySelector<HTMLElement>(".list-row");
-      if (row) {
-        row.hidden = !row.hidden;
-        if (!row.hidden) row.querySelector<HTMLInputElement>("input")?.focus();
+    const modeButton = target.closest<HTMLButtonElement>("[data-card-mode]");
+    if (modeButton) {
+      const card = modeButton.closest<HTMLElement>(".inventory-card");
+      if (card) {
+        card.dataset.mode = modeButton.dataset.cardMode ?? "";
+        if (card.dataset.mode === "list") card.querySelector<HTMLInputElement>("input")?.select();
       }
+      return;
+    }
+
+    const sellButton = target.closest<HTMLButtonElement>("[data-sell-confirm]");
+    if (sellButton?.dataset.itemId) {
+      sellButton.disabled = true;
+      sellButton.textContent = "Selling…";
+      try {
+        const sale = await sellItem(sellButton.dataset.itemId);
+        toast(`Sold ${sale.item_name} for ${sale.price} coins.`, "ok");
+      } catch (error) {
+        toast(error instanceof Error ? error.message : "Could not sell item.", "error");
+      }
+      await reload();
       return;
     }
 
     const confirmList = target.closest<HTMLButtonElement>("[data-list-confirm]");
     if (confirmList?.dataset.itemId) {
-      const input = confirmList.parentElement?.querySelector<HTMLInputElement>("input");
+      const input = confirmList.closest(".card-sub")?.querySelector<HTMLInputElement>("input");
       const price = Number(input?.value);
-      if (!Number.isInteger(price) || price <= 0) {
-        setMessage(root, "Enter a whole-number price above 0.", "error");
+      if (!Number.isInteger(price) || price <= 0 || price > 1_000_000) {
+        toast("Enter a whole-number price between 1 and 1,000,000.", "error");
         return;
       }
       confirmList.disabled = true;
+      confirmList.textContent = "Listing…";
       try {
         await createListing(confirmList.dataset.itemId, price);
-        setMessage(root, `Listed for ${price} coins.`, "ok");
-        await reload();
+        toast(`Listed for ${price} coins.`, "ok");
       } catch (error) {
-        confirmList.disabled = false;
-        setMessage(root, error instanceof Error ? error.message : "Could not list item.", "error");
+        toast(error instanceof Error ? error.message : "Could not list item.", "error");
       }
+      await reload();
       return;
     }
 
@@ -167,18 +174,32 @@ export function mountMarketplace(root: HTMLElement, onInventoryChange: () => Pro
     if (!listingId) return;
 
     const buying = marketButton?.dataset.marketAction === "buy";
+    if (buying && marketButton && marketButton.dataset.armed !== "1") {
+      marketButton.dataset.armed = "1";
+      marketButton.textContent = "Confirm?";
+      marketButton.classList.add("is-armed");
+      window.setTimeout(() => {
+        if (marketButton.isConnected && marketButton.dataset.armed === "1") {
+          marketButton.dataset.armed = "";
+          marketButton.textContent = "Buy";
+          marketButton.classList.remove("is-armed");
+        }
+      }, 3000);
+      return;
+    }
+
     busyId = listingId;
     await refreshMarketplace(root);
     try {
       if (buying) {
         const bought = await purchaseListing(listingId);
-        setMessage(root, `Bought ${bought.item.definition.name} for ${bought.price} coins.`, "ok");
+        toast(`Bought ${bought.item.definition.name} for ${bought.price} coins.`, "ok");
       } else {
         await cancelListing(listingId);
-        setMessage(root, "Listing cancelled. The item is back in your backpack.", "ok");
+        toast("Listing cancelled. The item is back in your backpack.", "ok");
       }
     } catch (error) {
-      setMessage(root, error instanceof Error ? error.message : "Marketplace action failed.", "error");
+      toast(error instanceof Error ? error.message : "Marketplace action failed.", "error");
     } finally {
       busyId = null;
       await reload();

@@ -28,6 +28,13 @@ RARITY_RULES = {
 }
 
 
+SELL_RARITY_MULTIPLIER = {"common": 1, "rare": 2, "epic": 3, "legendary": 5}
+
+
+def sell_value(rarity: str, stat_total: int) -> int:
+    return max(1, stat_total * SELL_RARITY_MULTIPLIER[rarity])
+
+
 def _item(
     archetype_id: str,
     name: str,
