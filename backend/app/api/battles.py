@@ -17,7 +17,7 @@ async def create_pve(
     payload: PveBattleCreate,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> BattleRead:
-    battle = await create_pve_battle(session, payload.player_id)
+    battle = await create_pve_battle(session, payload.player_id, enemy_stage=payload.enemy_stage)
     if battle is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

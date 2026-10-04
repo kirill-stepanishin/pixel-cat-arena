@@ -38,6 +38,7 @@ class Player(Base):
         nullable=True,
         index=True,
     )
+    highest_unlocked_stage: Mapped[int] = mapped_column(default=1, nullable=False)
 
     cats: Mapped[list["Cat"]] = relationship(
         back_populates="player",

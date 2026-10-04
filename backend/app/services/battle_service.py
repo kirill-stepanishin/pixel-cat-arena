@@ -8,55 +8,61 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.battle import Battle, BattleEvent, Enemy
-from app.models.item import ItemInstance
-from app.models.player import Player
+from app.models.battle import Battle, BattleEvent, Enemy, Reward
+from app.models.item import ItemDefinition, ItemInstance
+from app.models.player import Currency, Player
 
-ENEMY_DEFINITIONS = (
-    {"id": "dummy-1", "name": "Dummy 1", "visual_key": "dummy-1", "attack": 7, "defense": 8, "speed": 6},
-    {"id": "dummy-2", "name": "Dummy 2", "visual_key": "dummy-2", "attack": 11, "defense": 12, "speed": 7},
-    {"id": "dummy-3", "name": "Dummy 3", "visual_key": "dummy-3", "attack": 15, "defense": 16, "speed": 8},
-)
+BASE_ENEMY = {"attack": 7, "defense": 8, "speed": 6}
+ENEMY_STAGE_GROWTH = {"attack": 4, "defense": 4, "speed": 1}
+COINS_PER_STAGE = 25
 MAX_TURNS = 100
 MAX_HP = 100
 
 
-async def ensure_enemy_roster(session: AsyncSession) -> list[Enemy]:
-    result = await session.execute(select(Enemy).where(Enemy.id.in_([item["id"] for item in ENEMY_DEFINITIONS])))
-    existing = {enemy.id: enemy for enemy in result.scalars().all()}
-    missing = [
-        Enemy(**definition)
-        for definition in ENEMY_DEFINITIONS
-        if definition["id"] not in existing
-    ]
-    if missing:
-        session.add_all(missing)
+def enemy_definition(stage: int) -> dict[str, object]:
+    return {
+        "id": f"dummy-{stage}",
+        "stage": stage,
+        "name": f"Dummy {stage}",
+        "visual_key": "dummy-1",
+        "attack": BASE_ENEMY["attack"] + ENEMY_STAGE_GROWTH["attack"] * (stage - 1),
+        "defense": BASE_ENEMY["defense"] + ENEMY_STAGE_GROWTH["defense"] * (stage - 1),
+        "speed": BASE_ENEMY["speed"] + ENEMY_STAGE_GROWTH["speed"] * (stage - 1),
+    }
+
+
+async def ensure_enemy(session: AsyncSession, stage: int) -> Enemy:
+    result = await session.execute(select(Enemy).where(Enemy.stage == stage))
+    enemy = result.scalar_one_or_none()
+    if enemy is None:
+        enemy = Enemy(**enemy_definition(stage))
+        session.add(enemy)
         await session.flush()
-        existing.update({enemy.id: enemy for enemy in missing})
-    return [existing[definition["id"]] for definition in ENEMY_DEFINITIONS]
+    return enemy
 
 
 async def get_current_enemy(session: AsyncSession, player_id: str) -> Enemy | None:
     player = await session.get(Player, player_id, with_for_update=True)
     if player is None:
         return None
-    roster = await ensure_enemy_roster(session)
-    if player.current_enemy_id not in {enemy.id for enemy in roster}:
-        player.current_enemy_id = roster[0].id
+    if player.current_enemy_id is None:
+        player.current_enemy_id = (await ensure_enemy(session, player.highest_unlocked_stage)).id
         await session.flush()
-    return next(enemy for enemy in roster if enemy.id == player.current_enemy_id)
+    return await session.get(Enemy, player.current_enemy_id)
 
 
 async def create_pve_battle(
     session: AsyncSession,
     player_id: str,
     *,
+    enemy_stage: int | None = None,
     seed: int | None = None,
 ) -> Battle | None:
     player_result = await session.execute(
         select(Player)
         .options(
             selectinload(Player.cats),
+            selectinload(Player.currencies),
             selectinload(Player.items).selectinload(ItemInstance.definition),
         )
         .where(Player.id == player_id)
@@ -68,7 +74,13 @@ async def create_pve_battle(
     player = await session.get(Player, player_id, with_for_update=True)
     if player is None:
         return None
-    enemy = await get_current_enemy(session, player_id)
+    if enemy_stage is None:
+        enemy = await get_current_enemy(session, player_id)
+    elif enemy_stage <= player.highest_unlocked_stage:
+        enemy = await ensure_enemy(session, enemy_stage)
+        player.current_enemy_id = enemy.id
+    else:
+        return None
     if enemy is None:
         return None
     cat = player.cats[0]
@@ -99,6 +111,7 @@ async def create_pve_battle(
     battle = Battle(
         player_id=player_id,
         enemy_id=enemy.id,
+        enemy_stage=enemy.stage,
         seed=battle_seed,
         status="completed",
         result=result,
@@ -108,13 +121,62 @@ async def create_pve_battle(
         events=[BattleEvent(**event) for event in events],
     )
     session.add(battle)
-    if result == "player":
-        roster = await ensure_enemy_roster(session)
-        current_index = next(index for index, item in enumerate(roster) if item.id == enemy.id)
-        player.current_enemy_id = roster[min(current_index + 1, len(roster) - 1)].id
     await session.flush()
-    await session.refresh(battle, attribute_names=["events"])
+    if result == "player":
+        if enemy.stage == player.highest_unlocked_stage:
+            player.highest_unlocked_stage += 1
+            player.current_enemy_id = (await ensure_enemy(session, player.highest_unlocked_stage)).id
+        await create_reward(session, battle, player, enemy.stage, battle_seed)
+    await session.refresh(battle, attribute_names=["events", "reward"])
     return battle
+
+
+async def create_reward(
+    session: AsyncSession,
+    battle: Battle,
+    player: Player,
+    stage: int,
+    seed: int,
+) -> Reward:
+    existing_result = await session.execute(select(Reward).where(Reward.battle_id == battle.id))
+    existing = existing_result.scalar_one_or_none()
+    if existing is not None:
+        return existing
+
+    currency_amount = stage * COINS_PER_STAGE
+    currency = next((item for item in player.currencies if item.currency_type == "coins"), None)
+    if currency is None:
+        currency = Currency(player_id=player.id, currency_type="coins", balance=0)
+        session.add(currency)
+        await session.flush()
+    currency.balance += currency_amount
+
+    drop = random.Random(seed ^ stage).random() < min(0.15 + (stage // 5) * 0.05, 0.5)
+    item_instance_id = None
+    if drop:
+        definitions_result = await session.execute(select(ItemDefinition).order_by(ItemDefinition.rarity, ItemDefinition.id))
+        definitions = list(definitions_result.scalars().all())
+        if definitions:
+            rare_chance = min(0.1 + (stage // 5) * 0.1, 0.6)
+            rare = random.Random(seed ^ (stage * 17)).random() < rare_chance
+            eligible = [item for item in definitions if item.rarity == ("rare" if rare else "common")]
+            if not eligible:
+                eligible = definitions
+            definition = eligible[random.Random(seed ^ (stage * 31)).randrange(len(eligible))]
+            item = ItemInstance(owner_id=player.id, item_definition_id=definition.id, instance_number=1)
+            session.add(item)
+            await session.flush()
+            item_instance_id = item.id
+
+    reward = Reward(
+        battle_id=battle.id,
+        player_id=player.id,
+        currency_amount=currency_amount,
+        item_instance_id=item_instance_id,
+    )
+    session.add(reward)
+    await session.flush()
+    return reward
 
 
 def resolve_battle(
@@ -200,7 +262,7 @@ def resolve_battle(
 async def get_battle(session: AsyncSession, battle_id: str) -> Battle | None:
     result = await session.execute(
         select(Battle)
-        .options(selectinload(Battle.events))
+        .options(selectinload(Battle.events), selectinload(Battle.reward))
         .where(Battle.id == battle_id)
     )
     return result.scalar_one_or_none()

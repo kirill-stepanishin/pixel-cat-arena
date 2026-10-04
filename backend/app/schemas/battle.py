@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class PveBattleCreate(BaseModel):
     player_id: str = Field(min_length=1)
+    enemy_stage: int | None = Field(default=None, ge=1)
 
 
 class EnemyRead(BaseModel):
@@ -55,5 +56,17 @@ class BattleRead(BaseModel):
     turn_count: int
     created_at: datetime
     events: list[BattleEventRead]
+    reward: "RewardRead | None" = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RewardRead(BaseModel):
+    id: str
+    battle_id: str
+    player_id: str
+    currency_amount: int
+    item_instance_id: str | None
+    created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

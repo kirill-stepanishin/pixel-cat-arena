@@ -1,5 +1,5 @@
 from app.models.base import Base
-from app.models.battle import Battle, BattleEvent, Enemy
+from app.models.battle import Battle, BattleEvent, Enemy, Reward
 from app.models.item import ItemDefinition, ItemInstance
 from app.models.player import Cat, Currency, Player
 
