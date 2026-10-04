@@ -1,18 +1,33 @@
-export function renderGlyph(visualKey: string): string {
+export function renderGlyph(visualKey: string, slot?: string): string {
   const fallback = "items/unknown.png";
-  const assetKey = visualKey || fallback;
+  const assetKey = visualKey && slot ? `${slot}/${visualKey}` : fallback;
   return `<img src="/assets/items/${assetKey}.png" alt="" class="sprite-image" />`;
 }
 
-export function renderCat(enemy = false, equippedVisualKeys: string[] = []): string {
+export function renderCat(
+  enemy = false,
+  equippedItems: Array<{ visualKey: string; slot: string }> = [],
+): string {
   const asset = enemy ? "enemy-cat" : "mochi";
-  const layers = equippedVisualKeys.map((visualKey) =>
-    `<img src="/assets/items/${visualKey}.png" alt="" class="cat-equipment-layer" />`
-  ).join("");
+  const headLayers = layersForSlots(equippedItems, ["head"]);
+  const foregroundLayers = layersForSlots(equippedItems, ["body", "accessory", "weapon"]);
   return `
     <span class="cat-composition">
       <img src="/assets/cats/${asset}.png" alt="" class="cat-sprite" />
-      ${layers}
+      ${headLayers}
+      ${foregroundLayers}
     </span>
   `;
+}
+
+function layersForSlots(
+  equippedItems: Array<{ visualKey: string; slot: string }>,
+  slots: string[],
+): string {
+  return equippedItems
+    .filter(({ slot }) => slots.includes(slot))
+    .map(({ visualKey, slot }) =>
+      `<img src="/assets/items/${slot}/${visualKey}.png" alt="" class="cat-equipment-layer" />`
+    )
+    .join("");
 }

@@ -323,10 +323,15 @@ function renderPlayerView(
 
   renderEquipmentSlots(root, equippedItems, pendingActionId);
   renderInventoryList(root, player.id, cat, inventory, pendingActionId);
+  const equippedVisuals = equippedItems.map((item) => ({
+    visualKey: item.definition.visual_key,
+    slot: item.definition.slot,
+  }));
+  const catMarkup = renderCat(false, equippedVisuals);
   const catAvatar = root.querySelector<HTMLElement>(".cat-stage .cat-avatar");
-  if (catAvatar) {
-    catAvatar.innerHTML = renderCat(false, equippedItems.map((item) => item.definition.visual_key));
-  }
+  const battleAvatar = root.querySelector<HTMLElement>(".fighter-player .cat-avatar");
+  if (catAvatar) catAvatar.innerHTML = catMarkup;
+  if (battleAvatar) battleAvatar.innerHTML = renderCat(false, equippedVisuals);
 }
 
 function renderEnemySelector(root: HTMLElement, progress: EnemyProgressRead): void {
@@ -449,7 +454,7 @@ function renderEquipmentSlots(
         <div class="equipment-headline">
           <span>${labelText}</span>
         </div>
-        <div class="equipment-visual">${item ? renderGlyph(item.definition.visual_key) : "□"}</div>
+        <div class="equipment-visual">${item ? renderGlyph(item.definition.visual_key, item.definition.slot) : "□"}</div>
         <strong class="${item ? rarityClass(item.definition.rarity) : ""}">${itemName}</strong>
         ${buttonMarkup}
       </div>
@@ -491,7 +496,7 @@ function renderInventoryList(
     return `
       <article class="inventory-card ${rarityClass(item.definition.rarity)}">
         <div class="inventory-card-top">
-          <div class="mini-visual">${renderGlyph(item.definition.visual_key)}</div>
+          <div class="mini-visual">${renderGlyph(item.definition.visual_key, item.definition.slot)}</div>
           <div>
             <strong class="${rarityClass(item.definition.rarity)}">${item.definition.name}</strong>
             <span>${item.definition.slot}</span>

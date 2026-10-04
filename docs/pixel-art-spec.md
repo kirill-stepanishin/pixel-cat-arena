@@ -56,9 +56,25 @@ File: `frontend/public/assets/cats/enemy-cat.png`
 
 All files live under `frontend/public/assets/items/` and use a transparent
 64 x 64 canvas. The listed bounds are the maximum painted area, not a crop.
-The existing eight placeholder overlays were designed for the earlier
-front-facing cat and need to be redrawn against the downloaded Mochi pose.
-They are player-only assets; the enemy sprite is always rendered without gear.
+The eight player overlays are fitted to the downloaded Mochi pose. They are
+player-only assets; the enemy sprite is always rendered without gear.
+
+### Mochi overlay regions
+
+These are the current pixel regions used by the fitted layers:
+
+| Region | Pixel area | Notes |
+|---|---|---|
+| Head / ears | x=31..53, y=1..25 | Bunny Ears and Iron Helmet; keep face center x=40..45 clear |
+| Collar / neck | x=29..47, y=28..42 | Follows the visible neck into upper chest |
+| Body armor / jacket | x=21..48, y=27..51 | Stops above feet and leaves tail unobstructed |
+| Forward claws | x=47..63, y=28..40 | Follows Mochi's raised forward paw |
+| Wand | x=49..61, y=16..36 | Shares the forward paw grip and points up/right |
+| Shield | x=46..58, y=31..47 | Held in front of the torso, away from the face |
+
+All eight layers are rendered on the same 64×64 canvas. Non-weapon art is
+currently cleared while the item system remains intact for future art passes.
+The active weapon layers are fitted to Mochi's raised forward paw.
 
 | File | Slot | Anchor and painted bounds | Art direction | Primary stat by rarity |
 |---|---|---|---|---|
