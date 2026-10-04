@@ -6,9 +6,8 @@ description; this file contains implementation detail and agent guidance.
 
 ## Current implementation state
 
-**Status:** Phases 0–3 are complete. The next active slice is deciding and
-implementing transactional rewards and the corresponding dashboard updates
-after a PvE win.
+**Status:** Phases 0–4 are complete. The next active slice is marketplace
+design and implementation.
 
 - [x] Product concept and MVP loop documented
 - [x] Sequential implementation phases defined
@@ -20,7 +19,7 @@ after a PvE win.
 - [x] Player and cat persistence
 - [x] Inventory and equipment
 - [x] Deterministic PvE
-- [ ] Rewards and progression
+- [x] Rewards and progression
 - [ ] Marketplace
 - [ ] Asynchronous PvP
 - [ ] Hackathon polish and analytics
@@ -30,20 +29,22 @@ Completed implementation summary: the independent backend and frontend shells,
 SQLite-compatible local development path, development-player provisioning,
 player/cat persistence, starter inventory, authoritative equipment actions,
 computed stat overlays, persisted deterministic battle seeds/snapshots/events,
-per-player Dummy 1–3 progression, and the direct Fight dashboard flow.
+infinite linearly scaled Dummy progression, selectable defeated enemies,
+atomic stage-scaled rewards with duplicate item drops, player battle/reward
+history, and timed event playback with skip-to-result.
 The Fight action also resets its pending state after successful or failed
 requests so the control remains usable.
 
 Key decisions: SQLite is supported locally while Tiger Cloud remains optional;
 MVP identity is the unauthenticated `dev-player`; the frontend stays
 single-page; and the server remains authoritative for equipment, combat
-results, and future rewards.
+results, rewards, and progression.
 
 Current gameplay defaults are intentionally small: a development player named
 `dev-player`, one cat named Mochi with base stats `12/10/8` for
 attack/defense/speed, `125` starter coins, and four starter items covering the
-four equipment slots. No authentication, battle result, or marketplace
-behavior is assumed yet.
+four equipment slots. Authentication, marketplace behavior, and asynchronous
+PvP remain future work.
 
 Before adding content, preserve these extension boundaries:
 
@@ -210,38 +211,15 @@ browser never computes the battle result or progression. Complete.
 
 ### Phase 4 — Rewards and progression
 
-Before implementation, decide the reward and UI contract:
+Completed: infinite enemy stages with fixed linear stat scaling, highest-stage
+unlock progression, defeated-enemy selection, linearly scaling coin rewards,
+stage-band item drops, duplicate item instances, atomic battle/reward
+transactions with battle-keyed idempotency, player battle/reward history, and
+timed browser playback of persisted battle events with skip-to-result.
 
-- Whether wins against the final Dummy 3 produce repeatable rewards or a
-  one-time completion reward.
-- Currency amounts per enemy and whether item drops are fixed, weighted, or
-  deferred.
-- Whether a reward is created in the battle transaction or claimed later.
-- The idempotency key and API shape that prevent a battle from being rewarded
-  twice.
-- Whether cat XP/levels are included now; if so, define XP for wins and the
-  level thresholds. Losses and draws currently provide neither rewards nor
-  progression.
-- Whether duplicate item instances are allowed and how dropped items are
-  represented and equipped.
-- Whether Phase 4 exposes player battle history and reward history endpoints.
-- The dashboard behavior for reward summaries, coin balance refresh, item-drop
-  notifications, loading/pending states, and reward errors.
-
-Next active phase:
-
-1. Add reward and item-drop definitions.
-2. Award currency and items transactionally after wins; draws and losses award
-   nothing.
-3. Add idempotency protection so a battle cannot be rewarded twice.
-4. Add a minimal reward response and dashboard notification.
-5. Add cat experience and a minimal level display if time allows.
-6. Add battle and reward history.
-7. Update the dashboard to show authoritative reward results, refreshed
-   currency/inventory, and explicit pending, empty, and error states.
-
-**Exit criteria:** A win produces one persistent reward, which can be equipped
-and used in a later battle.
+The dashboard reveals rewards after playback, refreshes authoritative player
+state, and includes playback HP bars, result messaging, and failure-safe
+skip behavior. Cat XP and levels are intentionally out of scope.
 
 ### Phase 5 — Tiger Data marketplace
 

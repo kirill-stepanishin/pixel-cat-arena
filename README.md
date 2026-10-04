@@ -47,14 +47,16 @@ browser displays the completed outcome:
 1. The server snapshots the cat's equipment and stats.
 2. A deterministic battle seed controls turn order and random events.
 3. The fighters attack automatically until one wins.
-4. The server stores the result and advances the player's current opponent
-   after a win.
-5. The dashboard displays the authoritative result and the next opponent.
+4. The server stores the result, awards stage-scaled rewards on wins, and
+   advances the highest unlocked opponent.
+5. The dashboard plays the persisted event log, then displays the authoritative
+   result, reward, and next opponent.
 
-Rewards are the next implementation slice. The current PvE flow persists
-battles and events but intentionally grants no currency or item drops yet.
-Battle replay is also deferred; the first dashboard uses a direct Fight action
-and result notification.
+The PvE roster is infinite and scales linearly. The latest unlocked stage is
+the default opponent, while an arena selector allows replaying any defeated
+stage. Replays grant that stage's normal coins and loot table without
+advancing progression. Rewards are persisted atomically with the battle and
+duplicate item drops are valid.
 
 This keeps combat fair, deterministic, and easy to extend to asynchronous PvP.
 
@@ -126,10 +128,12 @@ marketplace queries, and time-series gameplay analytics.
 ## MVP target
 
 The current playable slice lets a player create a development identity, receive
-a starter cat and gear, equip items, and fight a deterministic PvE roster.
-Battles, snapshots, events, equipment, and enemy progression are persisted and
-server-authoritative. The next slice adds transactional rewards and a small
-dashboard notification before marketplace and asynchronous PvP work.
+a starter cat and gear, equip items, and fight an infinite deterministic PvE
+roster. Battles, snapshots, events, equipment, enemy progression, scaled
+rewards, and battle/reward history are persisted and server-authoritative. The
+dashboard includes enemy selection, timed battle playout, skip-to-result, and
+post-playback reward notifications. Marketplace and asynchronous PvP remain
+future work.
 
 The eventual MVP will let a player earn persistent rewards and buy or sell
 items. Combat, inventory ownership, rewards, and marketplace transfers will
