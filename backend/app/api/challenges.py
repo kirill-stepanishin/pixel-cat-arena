@@ -5,7 +5,9 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import get_current_player
 from app.db import get_session
+from app.models.player import Player
 from app.schemas.challenge import PvpChallengeCreate, PvpChallengeRead
 from app.schemas.pvp import PvpMatchRead
 from app.services.challenge_service import (
@@ -24,7 +26,10 @@ router = APIRouter(prefix="/pvp", tags=["pvp"])
 async def read_player_challenges(
     player_id: str,
     session: Annotated[AsyncSession, Depends(get_session)],
+    current_player: Annotated[Player, Depends(get_current_player)],
 ) -> list[PvpChallengeRead]:
+    if player_id != current_player.id:
+        raise HTTPException(status_code=403, detail="player access denied")
     challenges = await get_player_challenges(session, player_id)
     return [PvpChallengeRead.from_model(challenge) for challenge in challenges]
 
@@ -33,7 +38,10 @@ async def read_player_challenges(
 async def read_player_matches(
     player_id: str,
     session: Annotated[AsyncSession, Depends(get_session)],
+    current_player: Annotated[Player, Depends(get_current_player)],
 ) -> list[PvpMatchRead]:
+    if player_id != current_player.id:
+        raise HTTPException(status_code=403, detail="player access denied")
     matches = await get_player_matches(session, player_id)
     return [PvpMatchRead.from_model(match) for match in matches]
 
@@ -42,8 +50,11 @@ async def read_player_matches(
 async def create_pvp_challenge(
     payload: PvpChallengeCreate,
     session: Annotated[AsyncSession, Depends(get_session)],
+    current_player: Annotated[Player, Depends(get_current_player)],
 ) -> PvpChallengeRead:
     try:
+        if payload.challenger_id != current_player.id:
+            raise ChallengeError("player access denied", 403)
         challenge = await create_challenge(
             session,
             payload.challenger_id,
@@ -60,10 +71,13 @@ async def create_pvp_challenge(
 async def read_pvp_challenge(
     challenge_id: str,
     session: Annotated[AsyncSession, Depends(get_session)],
+    current_player: Annotated[Player, Depends(get_current_player)],
 ) -> PvpChallengeRead:
     challenge = await get_challenge(session, challenge_id)
     if challenge is None:
         raise HTTPException(status_code=404, detail="challenge not found")
+    if current_player.id not in {challenge.challenger_id, challenge.challenged_id}:
+        raise HTTPException(status_code=403, detail="challenge access denied")
     return PvpChallengeRead.from_model(challenge)
 
 
@@ -71,10 +85,13 @@ async def read_pvp_challenge(
 async def resolve_pvp_challenge(
     challenge_id: str,
     session: Annotated[AsyncSession, Depends(get_session)],
+    current_player: Annotated[Player, Depends(get_current_player)],
 ) -> PvpMatchRead:
     match = await resolve_challenge(session, challenge_id)
     if match is None:
         raise HTTPException(status_code=404, detail="challenge not found")
+    if current_player.id not in {match.challenger_id, match.challenged_id}:
+        raise HTTPException(status_code=403, detail="challenge access denied")
     await session.commit()
     return PvpMatchRead.from_model(match)
 
@@ -83,10 +100,13 @@ async def resolve_pvp_challenge(
 async def read_pvp_match(
     challenge_id: str,
     session: Annotated[AsyncSession, Depends(get_session)],
+    current_player: Annotated[Player, Depends(get_current_player)],
 ) -> PvpMatchRead:
     from app.services.challenge_service import get_match
 
     match = await get_match(session, challenge_id)
     if match is None:
         raise HTTPException(status_code=404, detail="match not found")
+    if current_player.id not in {match.challenger_id, match.challenged_id}:
+        raise HTTPException(status_code=403, detail="challenge access denied")
     return PvpMatchRead.from_model(match)

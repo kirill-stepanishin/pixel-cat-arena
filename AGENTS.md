@@ -6,10 +6,10 @@ next work.
 
 ## Current implementation state
 
-**Status:** The local single-player PvE foundation is complete. The next goal
-is a local two-player demo using two browser sessions and one backend process.
-Accounts, instant selling, marketplace trading, and asynchronous PvP are not
-implemented yet. Hosting is explicitly out of scope for this milestone.
+**Status:** The local two-player PvP demo and unified PvE/Async PvP arena UI
+are complete. The next goal is local demo verification and the remaining
+economy features: selling and marketplace trading. Hosting is explicitly out
+of scope for this milestone.
 
 - [x] Product concept and MVP loop documented
 - [x] Backend and frontend scaffolds
@@ -21,10 +21,10 @@ implemented yet. Hosting is explicitly out of scope for this milestone.
 - [x] Layered cat equipment visuals
 - [x] Deterministic server-authoritative PvE
 - [x] Persistent battle events, rewards, and enemy progression
-- [ ] Accounts and authenticated sessions
+- [x] Accounts and authenticated sessions (registration/login/session foundation)
 - [ ] Instant item selling
-- [ ] Fixed-price marketplace
-- [ ] Asynchronous PvP (published build snapshots implemented)
+- [x] Fixed-price marketplace
+- [x] Asynchronous PvP (published builds, challenges, deterministic matches, and replay UI)
 - [ ] Local two-player smoke test
 - [ ] Visual polish and analytics
 - [ ] Solana NFT integration
@@ -132,8 +132,8 @@ battle/reward history, timed playback, and skip-to-result exist.
 
 ### Phase 5 — Local accounts and sessions
 
-1. Add a password hash to players through a migration.
-2. Add register, login, current-user, and logout/session behavior.
+1. [x] Add a password hash to players through a migration.
+2. [x] Add register, login, current-user, and logout/session behavior.
 3. Use authenticated identity for protected player, item, battle, and currency
    operations instead of trusting arbitrary player IDs from the browser.
 4. Keep scope small: no email verification, password reset, OAuth, or wallet
@@ -246,7 +246,7 @@ GET  /auth/me
 POST /players/items/{item_id}/sell
 POST /marketplace/listings
 GET  /marketplace/listings
-POST /marketplace/listings/{listing_id}/buy
+POST /marketplace/listings/{listing_id}/purchase
 POST /marketplace/listings/{listing_id}/cancel
 POST /pvp/builds/publish
 POST /pvp/challenges

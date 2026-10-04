@@ -78,6 +78,8 @@ def test_republishing_keeps_previous_snapshot_immutable(monkeypatch) -> None:
 def test_publishing_requires_an_existing_player(monkeypatch) -> None:
     monkeypatch.setattr(db, "session_factory", _build_session_factory())
 
-    response = TestClient(app).post("/builds/missing-player/publish")
+    client = TestClient(app)
+    client.post("/dev/player")
+    response = client.post("/builds/missing-player/publish")
 
-    assert response.status_code == 404
+    assert response.status_code == 403

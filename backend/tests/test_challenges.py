@@ -24,11 +24,12 @@ def _build_session_factory() -> async_sessionmaker:
 def test_challenge_can_target_username_and_freezes_published_builds(monkeypatch) -> None:
     monkeypatch.setattr(db, "session_factory", _build_session_factory())
     client = TestClient(app)
+    opponent_client = TestClient(app)
     challenger = client.post("/players", json={"username": "challenger"}).json()
-    challenged = client.post("/players", json={"username": "opponent"}).json()
+    challenged = opponent_client.post("/players", json={"username": "opponent"}).json()
 
     first_build = client.post(f"/builds/{challenger['id']}/publish").json()
-    opponent_build = client.post(f"/builds/{challenged['id']}/publish").json()
+    opponent_build = opponent_client.post(f"/builds/{challenged['id']}/publish").json()
     response = client.post(
         "/pvp/challenges",
         json={
@@ -51,10 +52,11 @@ def test_challenge_can_target_username_and_freezes_published_builds(monkeypatch)
 def test_challenge_can_target_player_id(monkeypatch) -> None:
     monkeypatch.setattr(db, "session_factory", _build_session_factory())
     client = TestClient(app)
+    opponent_client = TestClient(app)
     challenger = client.post("/players", json={"username": "challenger"}).json()
-    challenged = client.post("/players", json={"username": "opponent"}).json()
+    challenged = opponent_client.post("/players", json={"username": "opponent"}).json()
     client.post(f"/builds/{challenger['id']}/publish")
-    client.post(f"/builds/{challenged['id']}/publish")
+    opponent_client.post(f"/builds/{challenged['id']}/publish")
 
     response = client.post(
         "/pvp/challenges",
@@ -71,7 +73,7 @@ def test_challenge_requires_both_published_builds_and_rejects_self(monkeypatch) 
     monkeypatch.setattr(db, "session_factory", _build_session_factory())
     client = TestClient(app)
     challenger = client.post("/players", json={"username": "challenger"}).json()
-    challenged = client.post("/players", json={"username": "opponent"}).json()
+    challenged = TestClient(app).post("/players", json={"username": "opponent"}).json()
 
     missing_build = client.post(
         "/pvp/challenges",
@@ -95,10 +97,11 @@ def test_challenge_requires_both_published_builds_and_rejects_self(monkeypatch) 
 def test_resolve_challenge_uses_saved_builds_and_is_idempotent(monkeypatch) -> None:
     monkeypatch.setattr(db, "session_factory", _build_session_factory())
     client = TestClient(app)
+    opponent_client = TestClient(app)
     challenger = client.post("/players", json={"username": "challenger"}).json()
-    challenged = client.post("/players", json={"username": "opponent"}).json()
+    challenged = opponent_client.post("/players", json={"username": "opponent"}).json()
     challenger_build = client.post(f"/builds/{challenger['id']}/publish").json()
-    challenged_build = client.post(f"/builds/{challenged['id']}/publish").json()
+    challenged_build = opponent_client.post(f"/builds/{challenged['id']}/publish").json()
     challenge = client.post(
         "/pvp/challenges",
         json={
@@ -130,10 +133,11 @@ def test_resolve_challenge_uses_saved_builds_and_is_idempotent(monkeypatch) -> N
 def test_player_history_includes_challenges_and_completed_matches(monkeypatch) -> None:
     monkeypatch.setattr(db, "session_factory", _build_session_factory())
     client = TestClient(app)
+    opponent_client = TestClient(app)
     challenger = client.post("/players", json={"username": "challenger"}).json()
-    challenged = client.post("/players", json={"username": "opponent"}).json()
+    challenged = opponent_client.post("/players", json={"username": "opponent"}).json()
     client.post(f"/builds/{challenger['id']}/publish")
-    client.post(f"/builds/{challenged['id']}/publish")
+    opponent_client.post(f"/builds/{challenged['id']}/publish")
     challenge = client.post(
         "/pvp/challenges",
         json={
@@ -146,7 +150,7 @@ def test_player_history_includes_challenges_and_completed_matches(monkeypatch) -
     challenger_challenges = client.get(
         f"/pvp/players/{challenger['id']}/challenges"
     )
-    challenged_matches = client.get(f"/pvp/players/{challenged['id']}/matches")
+    challenged_matches = opponent_client.get(f"/pvp/players/{challenged['id']}/matches")
 
     assert challenger_challenges.status_code == 200
     assert [item["id"] for item in challenger_challenges.json()] == [challenge["id"]]
@@ -154,5 +158,6 @@ def test_player_history_includes_challenges_and_completed_matches(monkeypatch) -
     assert len(challenged_matches.json()) == 1
     assert challenged_matches.json()[0]["challenge_id"] == challenge["id"]
 
-    unrelated = client.post("/players", json={"username": "unrelated"}).json()
-    assert client.get(f"/pvp/players/{unrelated['id']}/matches").json() == []
+    unrelated_client = TestClient(app)
+    unrelated = unrelated_client.post("/players", json={"username": "unrelated"}).json()
+    assert unrelated_client.get(f"/pvp/players/{unrelated['id']}/matches").json() == []

@@ -5,7 +5,9 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import get_current_player, require_player
 from app.db import get_session
+from app.models.player import Player
 from app.schemas.battle import BattleRead, EnemyProgressRead, EnemyRead, PveBattleCreate, RewardRead
 from app.services.battle_service import (
     create_pve_battle,
@@ -21,7 +23,9 @@ router = APIRouter(prefix="/battles", tags=["battles"])
 async def create_pve(
     payload: PveBattleCreate,
     session: Annotated[AsyncSession, Depends(get_session)],
+    current_player: Annotated[Player, Depends(get_current_player)],
 ) -> BattleRead:
+    require_player(payload.player_id, current_player)
     battle = await create_pve_battle(session, payload.player_id, enemy_stage=payload.enemy_stage)
     if battle is None:
         raise HTTPException(
@@ -37,7 +41,9 @@ async def create_pve(
 async def read_current_enemy(
     player_id: str,
     session: Annotated[AsyncSession, Depends(get_session)],
+    current_player: Annotated[Player, Depends(get_current_player)],
 ) -> EnemyRead:
+    require_player(player_id, current_player)
     enemy = await get_current_enemy(session, player_id)
     if enemy is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="player not found")
@@ -49,7 +55,9 @@ async def read_current_enemy(
 async def read_enemy_progress(
     player_id: str,
     session: Annotated[AsyncSession, Depends(get_session)],
+    current_player: Annotated[Player, Depends(get_current_player)],
 ) -> EnemyProgressRead:
+    require_player(player_id, current_player)
     progress = await get_enemy_progress(session, player_id)
     if progress is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="player not found")
@@ -76,7 +84,9 @@ async def read_battle(
 async def read_player_battle_history(
     player_id: str,
     session: Annotated[AsyncSession, Depends(get_session)],
+    current_player: Annotated[Player, Depends(get_current_player)],
 ) -> list[BattleRead]:
+    require_player(player_id, current_player)
     from app.services.battle_service import get_player_battles
 
     battles = await get_player_battles(session, player_id)
@@ -87,7 +97,9 @@ async def read_player_battle_history(
 async def read_player_rewards(
     player_id: str,
     session: Annotated[AsyncSession, Depends(get_session)],
+    current_player: Annotated[Player, Depends(get_current_player)],
 ) -> list[RewardRead]:
+    require_player(player_id, current_player)
     from app.services.battle_service import get_player_rewards
 
     rewards = await get_player_rewards(session, player_id)

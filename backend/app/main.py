@@ -1,14 +1,16 @@
 from contextlib import asynccontextmanager
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.auth import router as auth_router
 from app.api.battles import router as battles_router
 from app.api.builds import router as builds_router
 from app.api.challenges import router as challenges_router
 from app.api.items import router as items_router
+from app.api.marketplace import router as marketplace_router
 from app.api.players import router as players_router
 from app.config import get_settings
 from app.db import check_database, get_session
@@ -34,8 +36,10 @@ app.add_middleware(
 app.include_router(players_router)
 app.include_router(items_router)
 app.include_router(battles_router)
+app.include_router(auth_router)
 app.include_router(builds_router)
 app.include_router(challenges_router)
+app.include_router(marketplace_router)
 
 
 @app.get("/health")
@@ -54,8 +58,13 @@ async def health() -> dict[str, str]:
 @app.post("/dev/player", response_model=PlayerWithDetails, include_in_schema=False)
 @app.post("/dev/players", response_model=PlayerWithDetails, include_in_schema=False)
 async def create_dev_player_alias(
+    response: Response,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> PlayerWithDetails:
     player = await get_or_create_development_player(session)
+    from app.api.auth import set_session_cookie
+    from app.services.auth_service import create_session
+    token = await create_session(session, player.id)
     await session.commit()
+    set_session_cookie(response, token)
     return PlayerWithDetails.model_validate(player)

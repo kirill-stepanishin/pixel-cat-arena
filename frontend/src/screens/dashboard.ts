@@ -1,11 +1,15 @@
 import {
-  ensureDevPlayer,
   equipItem,
   fightPve,
   getEnemyProgress,
   getInventory,
   unequipItem,
+  publishBuild,
+  challengePlayer,
+  resolveChallenge,
 } from "../api/gameApi";
+import { getCurrentPlayer, logout } from "../api/authApi";
+import { getListedItem, marketplaceMarkup, mountMarketplace, refreshMarketplace, refreshMyListings } from "./marketplace";
 import { renderCat } from "../rendering/placeholders";
 import { getEquippedItemsForCat, SLOT_ORDER, sumBonusForStat } from "../state/playerState";
 import type {
@@ -13,9 +17,12 @@ import type {
   EnemyProgressRead,
   ItemInstanceRead,
   PlayerWithDetails,
+  BuildSnapshotRead,
+  PvpMatchRead,
   SlotKey,
   StatKey,
 } from "../types";
+
 
 const STAT_ORDER: Array<{ key: StatKey; label: string }> = [
   { key: "attack", label: "ATK" },
@@ -37,6 +44,7 @@ export function mountDashboard(root: HTMLElement): void {
         </div>
         <div class="topbar-meta">
           <span class="player-tag" id="player-tag">Connecting to arena…</span>
+          <button type="button" class="ghost-button" id="logout-button">Log out</button>
         </div>
       </header>
 
@@ -46,9 +54,17 @@ export function mountDashboard(root: HTMLElement): void {
             <p class="eyebrow">ARENA</p>
             <h2>Cat versus cat</h2>
           </div>
-          <span class="rarity-badge">Automatic PvE</span>
+          <div class="mode-tabs" role="tablist">
+            <button type="button" class="mode-tab active" data-mode="pve">PvE</button>
+            <button type="button" class="mode-tab" data-mode="pvp">Async PvP</button>
+          </div>
         </div>
         <div class="battle-arena">
+          <ul class="arena-stats arena-stats-player" id="player-arena-stats">
+            <li>ATK --</li>
+            <li>DEF --</li>
+            <li>SPD --</li>
+          </ul>
           <div class="fighter fighter-player">
             <div class="fighter-label">
               <span class="eyebrow">YOUR CAT</span>
@@ -66,31 +82,54 @@ export function mountDashboard(root: HTMLElement): void {
           <div class="fighter fighter-enemy">
             <div class="fighter-core">
               <div class="fighter-health fighter-health-enemy">
-                <span>ENEMY</span>
+                <span id="opponent-kind">ENEMY</span>
                 <progress id="enemy-hp" max="100" value="100"></progress>
               </div>
               <div class="enemy-body" aria-hidden="true">${renderCat(true)}</div>
             </div>
             <div class="fighter-label">
               <span class="eyebrow">OPPONENT</span>
-              <h3 id="enemy-name">Loading enemy…</h3>
+              <h3 id="enemy-name">Loading opponent…</h3>
               <select id="enemy-selector" class="enemy-selector" aria-label="Choose defeated enemy"></select>
             </div>
           </div>
-        </div>
-        <div class="battle-controls">
-          <ul class="enemy-stats">
+          <ul class="arena-stats arena-stats-enemy">
             <li id="enemy-attack">ATK --</li>
             <li id="enemy-defense">DEF --</li>
             <li id="enemy-speed">SPD --</li>
           </ul>
+        </div>
+        <div class="battle-feed">
+          <p id="battle-playout" class="battle-ticker" aria-live="polite">Choose an opponent and press Fight.</p>
+          <button type="button" class="ghost-button skip-button" data-action="skip-battle" hidden>Skip</button>
+        </div>
+        <div class="battle-controls" id="pve-controls">
           <div class="battle-action">
             <button type="button" class="primary-button fight-button" data-action="fight">Fight</button>
-            <button type="button" class="ghost-button skip-button" data-action="skip-battle" hidden>Skip to result</button>
           </div>
-          <div id="battle-playout" class="battle-playout" aria-live="polite"></div>
-          <div id="battle-result" class="battle-result" aria-live="polite"></div>
-          <div id="battle-reward" class="battle-reward" aria-live="polite"></div>
+        </div>
+        <div class="pvp-controls is-hidden" id="pvp-panel">
+          <div class="pvp-step">
+            <div class="pvp-step-head"><span class="step-number">1</span>Publish your build</div>
+            <button type="button" class="ghost-button" id="publish-build" data-label="Publish build">Publish build</button>
+            <p class="step-caption" id="published-build-status">Not published yet</p>
+          </div>
+          <div class="pvp-step">
+            <div class="pvp-step-head"><span class="step-number">2</span>Pick an opponent</div>
+            <div class="input-group">
+              <input id="challenge-username" placeholder="Opponent username" autocomplete="off" aria-label="Opponent username">
+              <button type="button" class="ghost-button" id="challenge-player" data-label="Challenge">Challenge</button>
+            </div>
+            <p class="step-caption" id="challenge-status">They must publish a build too</p>
+          </div>
+          <div class="pvp-step">
+            <div class="pvp-step-head"><span class="step-number">3</span>Fight</div>
+            <button type="button" class="primary-button" id="resolve-challenge" data-label="Start match" disabled>Start match</button>
+            <p class="step-caption" id="pvp-status">Create a challenge first</p>
+          </div>
+        </div>
+        <div id="battle-summary" class="result-card" data-state="idle" aria-live="polite">
+          <p class="result-idle">Battle results will appear here.</p>
         </div>
       </section>
 
@@ -128,40 +167,49 @@ export function mountDashboard(root: HTMLElement): void {
             </div>
             <div id="inventory-list" class="inventory-list"></div>
           </section>
-
-          <section class="panel marketplace-panel">
-            <div class="panel-header compact">
-              <div>
-                <p class="eyebrow">MARKETPLACE</p>
-                <h3>Coming soon</h3>
-              </div>
-            </div>
-            <div class="market-grid">
-              <div class="market-card">
-                <span class="market-label">Tier</span>
-                <strong>Starter gear</strong>
-              </div>
-              <div class="market-card">
-                <span class="market-label">Market</span>
-                <strong>Live listings</strong>
-              </div>
-              <div class="market-card">
-                <span class="market-label">Next phase</span>
-                <strong>Trade and PvP</strong>
-              </div>
-            </div>
-          </section>
         </div>
       </div>
+      ${marketplaceMarkup()}
     </main>
   `;
 
   let pendingActionId: string | null = null;
   let skipPlayback: (() => void) | null = null;
+  let arenaMode: "pve" | "pvp" = "pve";
 
   root.addEventListener("click", async (event) => {
     const target = event.target as HTMLElement;
     const actionButton = target.closest<HTMLButtonElement>("[data-action]");
+
+    const modeButton = target.closest<HTMLButtonElement>("[data-mode]");
+    if (modeButton) {
+      arenaMode = modeButton.dataset.mode === "pvp" ? "pvp" : "pve";
+      root.querySelectorAll("[data-mode]").forEach((button) => {
+        button.classList.toggle("active", button === modeButton);
+      });
+      root.querySelector<HTMLElement>("#pvp-panel")?.classList.toggle("is-hidden", arenaMode !== "pvp");
+      root.querySelector<HTMLElement>("#pve-controls")?.classList.toggle("is-hidden", arenaMode !== "pve");
+      resetBattleSummary(root);
+      const ticker = root.querySelector<HTMLElement>("#battle-playout");
+      if (ticker) {
+        ticker.textContent = arenaMode === "pve"
+          ? "Choose an opponent and press Fight."
+          : "Publish your build, then challenge another player.";
+      }
+      if (arenaMode === "pve") {
+        const enemyBody = root.querySelector<HTMLElement>(".fighter-enemy .enemy-body");
+        if (enemyBody) {
+          enemyBody.innerHTML = renderCat(true);
+          enemyBody.classList.remove("is-mirrored");
+        }
+        const kind = root.querySelector<HTMLElement>("#opponent-kind");
+        if (kind) kind.textContent = "ENEMY";
+        const selector = root.querySelector<HTMLSelectElement>("#enemy-selector");
+        if (selector) selector.hidden = false;
+        void refreshDashboard(root, null);
+      }
+      return;
+    }
 
     if (!actionButton) {
       return;
@@ -179,7 +227,7 @@ export function mountDashboard(root: HTMLElement): void {
     }
 
     if (action === "fight") {
-      const player = await ensureDevPlayer();
+      const player = await getCurrentPlayer();
       const selector = root.querySelector<HTMLSelectElement>("#enemy-selector");
       setFightButtonState(root, true);
       try {
@@ -189,9 +237,9 @@ export function mountDashboard(root: HTMLElement): void {
         skipPlayback = playback.skip;
         await playback.promise;
         skipPlayback = null;
-        showBattleResult(root, battle.result);
-        showBattleReward(root, battle);
+        showPveSummary(root, battle);
         await refreshDashboard(root, null);
+        if (battle.reward) bumpCoins(root);
         setFightButtonState(root, false);
       } catch (error) {
         skipPlayback = null;
@@ -224,17 +272,137 @@ export function mountDashboard(root: HTMLElement): void {
     }
   });
 
-  void refreshDashboard(root, null);
+  root.querySelector("#logout-button")?.addEventListener("click", async () => {
+    await logout();
+    window.location.reload();
+  });
+  root.querySelector("#publish-build")?.addEventListener("click", () => void pvpAction(root, "publish", (skip) => { skipPlayback = skip; }));
+  root.querySelector("#challenge-player")?.addEventListener("click", () => void pvpAction(root, "challenge", (skip) => { skipPlayback = skip; }));
+  root.querySelector("#resolve-challenge")?.addEventListener("click", () => void pvpAction(root, "resolve", (skip) => { skipPlayback = skip; }));
+
+  mountMarketplace(root, () => refreshDashboard(root, null));
+  void refreshDashboard(root, null).then(() => refreshMarketplace(root));
+}
+
+type CaptionTone = "ok" | "error" | "neutral";
+
+function setCaption(element: HTMLElement | null, text: string, tone: CaptionTone = "neutral"): void {
+  if (!element) return;
+  element.textContent = text;
+  element.title = text;
+  element.dataset.tone = tone;
+}
+
+function setPvpBusy(root: HTMLElement, busyButtonId: string | null): void {
+  root.querySelectorAll<HTMLButtonElement>("#pvp-panel button").forEach((button) => {
+    const label = button.dataset.label ?? button.textContent ?? "";
+    const busy = busyButtonId !== null;
+    const isResolve = button.id === "resolve-challenge";
+    button.disabled = busy || (isResolve && !button.dataset.challengeId);
+    button.textContent = busy && button.id === busyButtonId ? "Working…" : label;
+  });
+}
+
+async function pvpAction(
+  root: HTMLElement,
+  action: "publish" | "challenge" | "resolve",
+  setSkip: (skip: (() => void) | null) => void,
+): Promise<void> {
+  const publishCaption = root.querySelector<HTMLElement>("#published-build-status");
+  const challengeCaption = root.querySelector<HTMLElement>("#challenge-status");
+  const matchCaption = root.querySelector<HTMLElement>("#pvp-status");
+  const resolveButton = root.querySelector<HTMLButtonElement>("#resolve-challenge");
+  const buttonId = { publish: "publish-build", challenge: "challenge-player", resolve: "resolve-challenge" }[action];
+  const caption = { publish: publishCaption, challenge: challengeCaption, resolve: matchCaption }[action];
+
+  setPvpBusy(root, buttonId);
+  try {
+    const player = await getCurrentPlayer();
+    if (action === "publish") {
+      const build = await publishBuild(player.id);
+      setCaption(publishCaption, `Published v${build.version} ✓`, "ok");
+    } else if (action === "challenge") {
+      const username = root.querySelector<HTMLInputElement>("#challenge-username")?.value.trim();
+      if (!username) throw new Error("Enter an opponent username.");
+      const challenge = await challengePlayer(player.id, username);
+      const opponentBuild = challenge.challenged_id === player.id
+        ? challenge.challenger_build
+        : challenge.challenged_build;
+      resetBattleSummary(root);
+      renderPvpOpponent(root, opponentBuild);
+      if (resolveButton) {
+        resolveButton.dataset.challengeId = challenge.id;
+        resolveButton.dataset.opponent = username;
+        resolveButton.dataset.label = "Start match";
+      }
+      setCaption(challengeCaption, `Challenge ready vs ${username}`, "ok");
+      setCaption(matchCaption, "Press Start match", "neutral");
+      const ticker = root.querySelector<HTMLElement>("#battle-playout");
+      if (ticker) ticker.textContent = `${opponentBuild.cat.name} is waiting in the arena.`;
+    } else {
+      const challengeId = resolveButton?.dataset.challengeId;
+      if (!challengeId) throw new Error("Create a challenge first.");
+      const match = await resolveChallenge(challengeId);
+      const playback = createBattlePlayback(root, toPvpReplay(match));
+      setSkip(playback.skip);
+      await playback.promise;
+      setSkip(null);
+      showPvpSummary(root, match, resolveButton?.dataset.opponent ?? "your opponent");
+      setCaption(matchCaption, `Match complete · ${match.turn_count} turns`, "ok");
+      if (resolveButton) resolveButton.dataset.label = "Watch again";
+    }
+  } catch (error) {
+    setSkip(null);
+    setCaption(caption, error instanceof Error ? error.message : "PvP action failed.", "error");
+  } finally {
+    setPvpBusy(root, null);
+  }
+}
+
+function renderPvpOpponent(root: HTMLElement, build: BuildSnapshotRead): void {
+  const name = root.querySelector<HTMLElement>("#enemy-name");
+  const kind = root.querySelector<HTMLElement>("#opponent-kind");
+  const attack = root.querySelector<HTMLElement>("#enemy-attack");
+  const defense = root.querySelector<HTMLElement>("#enemy-defense");
+  const speed = root.querySelector<HTMLElement>("#enemy-speed");
+  const selector = root.querySelector<HTMLSelectElement>("#enemy-selector");
+  if (name) name.textContent = build.cat.name;
+  if (kind) kind.textContent = "PLAYER";
+  if (attack) attack.textContent = `ATK ${build.cat.attack}`;
+  if (defense) defense.textContent = `DEF ${build.cat.defense}`;
+  if (speed) speed.textContent = `SPD ${build.cat.speed}`;
+  if (selector) selector.hidden = true;
+  const visuals = build.equipment
+    .filter((item) => item.visual_key)
+    .map((item) => ({ visualKey: item.visual_key!, slot: item.slot }));
+  const enemyBody = root.querySelector<HTMLElement>(".fighter-enemy .enemy-body");
+  if (enemyBody) {
+    enemyBody.innerHTML = renderCat(false, visuals);
+    enemyBody.classList.add("is-mirrored");
+  }
+}
+
+function toPvpReplay(match: PvpMatchRead): BattleRead {
+  return {
+    id: match.id,
+    enemy_stage: 0,
+    result: match.result === "challenger" ? "player" : "enemy",
+    events: match.events,
+    player_snapshot: match.challenger_snapshot,
+    enemy_snapshot: match.challenged_snapshot,
+    reward: null,
+  };
 }
 
 async function refreshDashboard(root: HTMLElement, pendingActionId: string | null): Promise<void> {
   const playerTagElement = root.querySelector<HTMLElement>("#player-tag");
 
   try {
-    const player = await ensureDevPlayer();
+    const player = await getCurrentPlayer();
     const [inventory, enemyProgress] = await Promise.all([
       getInventory(player.id),
       getEnemyProgress(player.id),
+      refreshMyListings().catch(() => undefined),
     ]);
 
     renderPlayerView(root, player, inventory, enemyProgress, pendingActionId);
@@ -243,7 +411,7 @@ async function refreshDashboard(root: HTMLElement, pendingActionId: string | nul
       playerTagElement.textContent = `Player ${player.username}`;
     }
   } catch (error) {
-    showError(root, error instanceof Error ? error.message : "Unable to load the dev player.");
+    showError(root, error instanceof Error ? error.message : "Unable to load the player.");
 
     if (playerTagElement) {
       playerTagElement.textContent = "Need backend";
@@ -306,6 +474,13 @@ function renderPlayerView(
     speed: cat.speed + bonusTotals.speed,
   };
 
+  const arenaStats = root.querySelector<HTMLElement>("#player-arena-stats");
+  if (arenaStats) {
+    arenaStats.innerHTML = STAT_ORDER.map(
+      (stat) => `<li>${stat.label} ${totals[stat.key]}</li>`,
+    ).join("");
+  }
+
   if (statGrid) {
     statGrid.innerHTML = STAT_ORDER.map((stat) => {
       const total = totals[stat.key];
@@ -363,14 +538,21 @@ function createBattlePlayback(root: HTMLElement, battle: BattleRead): {
     enemyHp.max = battle.enemy_snapshot.max_hp;
     enemyHp.value = battle.enemy_snapshot.max_hp;
   }
-  if (playout) playout.textContent = "Battle started…";
+  clearOutcomePose(root);
+  if (playout) {
+    playout.textContent = "Battle started…";
+    delete playout.dataset.side;
+  }
   if (skipButton) skipButton.hidden = false;
 
   const finish = (): void => {
     if (timer !== undefined) window.clearTimeout(timer);
     if (playerHp) playerHp.value = battle.events.at(-1)?.player_hp ?? playerHp.value;
     if (enemyHp) enemyHp.value = battle.events.at(-1)?.enemy_hp ?? enemyHp.value;
-    if (playout) playout.textContent = "Battle complete.";
+    if (playout) {
+      playout.textContent = "Battle complete.";
+      delete playout.dataset.side;
+    }
     if (skipButton) skipButton.hidden = true;
     resolvePlayback?.();
     resolvePlayback = null;
@@ -392,8 +574,9 @@ function createBattlePlayback(root: HTMLElement, battle: BattleRead): {
       }
       if (playout) {
         playout.textContent = event.event_type === "attack"
-          ? `${event.attacker === "player" ? "Mochi" : battle.enemy_snapshot.name} attacks for ${event.damage}!`
+          ? `${event.attacker === "player" ? battle.player_snapshot.name : battle.enemy_snapshot.name} attacks for ${event.damage}!`
           : event.event_type === "victory" ? "Victory blow!" : "Defeat blow!";
+        if (event.attacker) playout.dataset.side = event.attacker;
       }
       timer = window.setTimeout(playNext, 180);
     };
@@ -506,6 +689,7 @@ function renderInventoryList(
     const isEquipped = item.equipped_cat_id === cat?.id;
     const buttonText = isEquipped ? "Unequip" : "Equip";
     const action = isEquipped ? "unequip" : "equip";
+    const listing = getListedItem(item.id);
 
     return `
       <article class="inventory-card ${rarityClass(item.definition.rarity)}">
@@ -521,18 +705,27 @@ function renderInventoryList(
           <small>DEF ${item.modifiers.defense || 0}</small>
           <small>SPD ${item.modifiers.speed || 0}</small>
         </div>
-        <button
-          type="button"
-          class="primary-button"
-          data-action="${action}"
-          data-item-id="${item.id}"
-          data-player-id="${playerId}"
-          data-cat-id="${cat?.id ?? ""}"
-          ${pendingActionId === item.id ? "disabled" : ""}
-          ${!cat ? "disabled" : ""}
-        >
-          ${pendingActionId === item.id ? "Updating…" : buttonText}
-        </button>
+        ${listing ? `<span class="listed-badge">Listed · ${listing.price} coins</span>
+        <button type="button" class="ghost-button" data-cancel-listing="${listing.id}">Cancel listing</button>` : `
+        <div class="card-actions">
+          <button
+            type="button"
+            class="primary-button"
+            data-action="${action}"
+            data-item-id="${item.id}"
+            data-player-id="${playerId}"
+            data-cat-id="${cat?.id ?? ""}"
+            ${pendingActionId === item.id ? "disabled" : ""}
+            ${!cat ? "disabled" : ""}
+          >
+            ${pendingActionId === item.id ? "Updating…" : buttonText}
+          </button>
+          ${isEquipped ? "" : '<button type="button" class="ghost-button" data-list-toggle>List</button>'}
+        </div>
+        <div class="list-row" hidden>
+          <input type="number" min="1" max="1000000" step="1" placeholder="Price" aria-label="Listing price" />
+          <button type="button" class="primary-button" data-list-confirm data-item-id="${item.id}">Confirm</button>
+        </div>`}
       </article>
     `;
   }).join("");
@@ -546,25 +739,141 @@ function showError(root: HTMLElement, message: string): void {
   }
 }
 
-function showBattleResult(root: HTMLElement, result: "player" | "enemy"): void {
-  const resultElement = root.querySelector<HTMLElement>("#battle-result");
-  if (!resultElement) return;
-  resultElement.textContent =
-    result === "player" ? "Victory! The next dummy is ready." :
-    "Defeat. Try again against the same dummy.";
-  resultElement.dataset.result = result;
+interface SummaryPlaque {
+  kind: "coin" | "item" | "turns" | "foe" | "none";
+  label: string;
+  value: string;
+  count?: number;
 }
 
-function showBattleReward(root: HTMLElement, battle: BattleRead): void {
-  const rewardElement = root.querySelector<HTMLElement>("#battle-reward");
-  if (!rewardElement) return;
-  if (!battle.reward) {
-    rewardElement.textContent = "No reward this time.";
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (char) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char] as string
+  ));
+}
+
+function animateCount(element: HTMLElement, target: number): void {
+  if (target <= 0 || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    element.textContent = `+${target}`;
     return;
   }
-  rewardElement.textContent = battle.reward.item_instance_id
-    ? `Reward: +${battle.reward.currency_amount} coins and a new item!`
-    : `Reward: +${battle.reward.currency_amount} coins`;
+  const start = performance.now();
+  const duration = 700;
+  const tick = (now: number): void => {
+    const progress = Math.min(1, (now - start) / duration);
+    element.textContent = `+${Math.round(target * (1 - (1 - progress) ** 3))}`;
+    if (progress < 1) window.requestAnimationFrame(tick);
+  };
+  window.requestAnimationFrame(tick);
+}
+
+function clearOutcomePose(root: HTMLElement): void {
+  root.querySelectorAll(".cat-avatar, .enemy-body").forEach((element) => {
+    element.classList.remove("is-winner", "is-defeated");
+  });
+}
+
+function applyOutcomePose(root: HTMLElement, result: "player" | "enemy"): void {
+  clearOutcomePose(root);
+  const player = root.querySelector<HTMLElement>(".fighter-player .cat-avatar");
+  const enemy = root.querySelector<HTMLElement>(".fighter-enemy .enemy-body");
+  const [winner, loser] = result === "player" ? [player, enemy] : [enemy, player];
+  [winner, loser].forEach((element) => element?.classList.remove("attack-lunge"));
+  winner?.classList.add("is-winner");
+  loser?.classList.add("is-defeated");
+}
+
+function resetBattleSummary(root: HTMLElement): void {
+  clearOutcomePose(root);
+  const card = root.querySelector<HTMLElement>("#battle-summary");
+  if (!card) return;
+  card.dataset.state = "idle";
+  card.innerHTML = '<p class="result-idle">Battle results will appear here.</p>';
+}
+
+function renderPlaque(plaque: SummaryPlaque, index: number): string {
+  const icon = plaque.kind === "coin" ? '<span class="plaque-icon coin-icon" aria-hidden="true"></span>'
+    : plaque.kind === "item" ? '<span class="plaque-icon gem-icon" aria-hidden="true"></span>'
+    : plaque.kind === "turns" ? '<span class="plaque-icon turn-icon" aria-hidden="true">⏱</span>'
+    : plaque.kind === "foe" ? '<span class="plaque-icon turn-icon" aria-hidden="true">⚔</span>'
+    : '<span class="plaque-icon turn-icon" aria-hidden="true">–</span>';
+  const count = plaque.count !== undefined ? ` data-count="${plaque.count}"` : "";
+  return `
+    <div class="plaque plaque-${plaque.kind}" style="--i:${index}">
+      ${icon}
+      <span class="plaque-text">
+        <span class="plaque-label">${escapeHtml(plaque.label)}</span>
+        <strong${count}>${escapeHtml(plaque.value)}</strong>
+      </span>
+    </div>`;
+}
+
+function showBattleSummary(
+  root: HTMLElement,
+  summary: { won: boolean; subtitle: string; plaques: SummaryPlaque[] },
+): void {
+  const card = root.querySelector<HTMLElement>("#battle-summary");
+  if (!card) return;
+  card.dataset.state = summary.won ? "win" : "loss";
+  card.innerHTML = `
+    <div class="result-banner">
+      <span class="result-title">${summary.won ? "VICTORY" : "DEFEAT"}</span>
+      <span class="result-subtitle">${escapeHtml(summary.subtitle)}</span>
+    </div>
+    <div class="result-plaques">${summary.plaques.map(renderPlaque).join("")}</div>`;
+  card.querySelectorAll<HTMLElement>("[data-count]").forEach((element) => {
+    animateCount(element, Number(element.dataset.count));
+  });
+  applyOutcomePose(root, summary.won ? "player" : "enemy");
+}
+
+function showPveSummary(root: HTMLElement, battle: BattleRead): void {
+  const won = battle.result === "player";
+  const enemy = battle.enemy_snapshot.name;
+  const plaques: SummaryPlaque[] = [];
+  if (battle.reward) {
+    plaques.push({
+      kind: "coin",
+      label: "Coins won",
+      value: `+${battle.reward.currency_amount}`,
+      count: battle.reward.currency_amount,
+    });
+    if (battle.reward.item_instance_id) {
+      plaques.push({ kind: "item", label: "New item", value: "In backpack" });
+    }
+  } else {
+    plaques.push({ kind: "none", label: "Reward", value: "None" });
+  }
+  plaques.push({
+    kind: "turns",
+    label: "Turns",
+    value: String(Math.max(0, ...battle.events.map((event) => event.turn_number))),
+  });
+  showBattleSummary(root, {
+    won,
+    subtitle: won ? `${enemy} was defeated.` : `${enemy} was too tough. Gear up and try again.`,
+    plaques,
+  });
+}
+
+function showPvpSummary(root: HTMLElement, match: PvpMatchRead, opponent: string): void {
+  const won = match.result === "challenger";
+  showBattleSummary(root, {
+    won,
+    subtitle: won ? `Your cat beat ${opponent}'s build.` : `${opponent}'s build won this round.`,
+    plaques: [
+      { kind: "foe", label: "Opponent", value: opponent },
+      { kind: "turns", label: "Turns", value: String(match.turn_count) },
+    ],
+  });
+}
+
+function bumpCoins(root: HTMLElement): void {
+  const badge = root.querySelector<HTMLElement>("#coins-badge");
+  if (!badge) return;
+  badge.classList.remove("is-bumped");
+  void badge.offsetWidth;
+  badge.classList.add("is-bumped");
 }
 
 function setFightButtonState(root: HTMLElement, pending: boolean): void {

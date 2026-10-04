@@ -5,6 +5,10 @@ import type {
   EnemyRead,
   ItemInstanceRead,
   PlayerWithDetails,
+  BuildSnapshotRead,
+  PvpMatchRead,
+  PvpChallengeRead,
+  ListingRead,
 } from "../types";
 
 const STORAGE_KEY = "pixel-cat-arena:player-id";
@@ -70,4 +74,54 @@ export async function unequipItem(
   return apiFetch<ItemInstanceRead>(`/players/${playerId}/cats/${catId}/items/${itemId}/unequip`, {
     method: "POST",
   });
+}
+
+export function publishBuild(playerId: string): Promise<BuildSnapshotRead> {
+  return apiFetch<BuildSnapshotRead>(`/builds/${playerId}/publish`, { method: "POST" });
+}
+
+export function challengePlayer(playerId: string, username: string): Promise<PvpChallengeRead> {
+  return apiFetch<PvpChallengeRead>("/pvp/challenges", {
+    method: "POST",
+    body: JSON.stringify({ challenger_id: playerId, challenged_username: username }),
+  });
+}
+
+export function resolveChallenge(challengeId: string): Promise<PvpMatchRead> {
+  return apiFetch<PvpMatchRead>(`/pvp/challenges/${challengeId}/resolve`, { method: "POST" });
+}
+
+export function getPvpMatch(challengeId: string): Promise<PvpMatchRead> {
+  return apiFetch<PvpMatchRead>(`/pvp/challenges/${challengeId}/match`);
+}
+
+export function getPvpHistory(playerId: string): Promise<PvpMatchRead[]> {
+  return apiFetch<PvpMatchRead[]>(`/pvp/players/${playerId}/matches`);
+}
+
+export type ListingScope = "others" | "mine";
+
+export function getListings(
+  scope: ListingScope,
+  filters: { slot?: string; rarity?: string } = {},
+): Promise<ListingRead[]> {
+  const params = new URLSearchParams({ scope });
+  if (filters.slot) params.set("slot", filters.slot);
+  if (filters.rarity) params.set("rarity", filters.rarity);
+  return apiFetch<ListingRead[]>(`/marketplace/listings?${params.toString()}`);
+}
+
+export function createListing(itemId: string, price: number): Promise<ListingRead> {
+  return apiFetch<ListingRead>("/marketplace/listings", {
+    method: "POST",
+    body: JSON.stringify({ item_id: itemId, price }),
+  });
+}
+
+export function cancelListing(listingId: string): Promise<ListingRead> {
+  return apiFetch<ListingRead>(`/marketplace/listings/${listingId}/cancel`, { method: "POST" });
+}
+
+export function purchaseListing(listingId: string): Promise<ListingRead> {
+  return apiFetch<ListingRead>(`/marketplace/listings/${listingId}/purchase`, { method: "POST" });
 }

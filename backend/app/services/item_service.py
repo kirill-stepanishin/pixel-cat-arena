@@ -6,7 +6,12 @@ from sqlalchemy.orm import selectinload
 
 from app.content.items import ITEM_TEMPLATES
 from app.models.item import ItemDefinition, ItemInstance
+from app.models.marketplace import MarketplaceListing
 from app.models.player import Cat
+
+
+class ItemListedError(Exception):
+    pass
 
 
 async def ensure_item_definitions(session: AsyncSession) -> list[ItemDefinition]:
@@ -80,6 +85,14 @@ async def equip_item(
     item = item_result.scalar_one_or_none()
     if item is None:
         return None
+    listed = await session.scalar(
+        select(MarketplaceListing.id).where(
+            MarketplaceListing.item_instance_id == item.id,
+            MarketplaceListing.status == "active",
+        )
+    )
+    if listed is not None:
+        raise ItemListedError
 
     equipped_result = await session.execute(
         select(ItemInstance)

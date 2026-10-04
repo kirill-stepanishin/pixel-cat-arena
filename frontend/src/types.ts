@@ -120,3 +120,49 @@ export interface EnemyProgressRead {
   selected_stage: number;
   enemies: EnemyRead[];
 }
+
+export interface BuildSnapshotRead {
+  id: string;
+  player_id: string;
+  cat_id: string;
+  version: number;
+  cat: { name: string; attack: number; defense: number; speed: number; max_hp: number };
+  equipment: Array<{ name: string; slot: SlotKey; rarity: string; visual_key?: string }>;
+  is_current: boolean;
+  created_at: string;
+}
+
+export interface PvpMatchRead {
+  id: string;
+  challenge_id: string;
+  result: "challenger" | "challenged";
+  challenger_id: string;
+  challenged_id: string;
+  turn_count: number;
+  events: BattleEventRead[];
+  challenger_snapshot: BattleRead["player_snapshot"];
+  challenged_snapshot: BattleRead["enemy_snapshot"];
+  created_at?: string;
+}
+
+export interface PvpChallengeRead {
+  id: string;
+  challenger_id: string;
+  challenged_id: string;
+  challenger_build: BuildSnapshotRead;
+  challenged_build: BuildSnapshotRead;
+  status: "pending" | "completed";
+  created_at: string;
+}
+
+export interface ListingRead {
+  id: string;
+  seller_id: string;
+  seller_username: string;
+  buyer_id: string | null;
+  price: number;
+  status: "active" | "sold" | "cancelled";
+  created_at: string;
+  closed_at: string | null;
+  item: ItemInstanceRead;
+}

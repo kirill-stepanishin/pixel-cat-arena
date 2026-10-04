@@ -5,9 +5,12 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import get_current_player, require_player
 from app.db import get_session
+from app.models.player import Player
 from app.schemas.item import ItemDefinitionRead, ItemInstanceRead
 from app.services.item_service import (
+    ItemListedError,
     ensure_item_definitions,
     equip_item,
     get_player_items,
@@ -20,8 +23,10 @@ router = APIRouter(prefix="/players", tags=["items"])
 @router.get("/{player_id}/items", response_model=list[ItemInstanceRead])
 async def get_inventory(
     player_id: str,
+    current_player: Annotated[Player, Depends(get_current_player)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> list[ItemInstanceRead]:
+    require_player(player_id, current_player)
     return [ItemInstanceRead.model_validate(item) for item in await get_player_items(session, player_id)]
 
 
@@ -42,9 +47,17 @@ async def equip_inventory_item(
     player_id: str,
     cat_id: str,
     item_id: str,
+    current_player: Annotated[Player, Depends(get_current_player)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> ItemInstanceRead:
-    item = await equip_item(session, player_id, cat_id, item_id)
+    require_player(player_id, current_player)
+    try:
+        item = await equip_item(session, player_id, cat_id, item_id)
+    except ItemListedError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="cancel the marketplace listing before equipping this item",
+        ) from error
     if item is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -62,8 +75,10 @@ async def unequip_inventory_item(
     player_id: str,
     cat_id: str,
     item_id: str,
+    current_player: Annotated[Player, Depends(get_current_player)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> ItemInstanceRead:
+    require_player(player_id, current_player)
     item = await unequip_item(session, player_id, cat_id, item_id)
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="equipped item not found")

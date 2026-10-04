@@ -33,7 +33,16 @@ async def get_or_create_development_player(session: AsyncSession, username: str 
             await session.flush()
         return player
 
-    player = Player(username=username)
+    return await create_player(session, username=username, password_hash=None)
+
+
+async def create_player(
+    session: AsyncSession,
+    *,
+    username: str,
+    password_hash: str | None,
+) -> Player:
+    player = Player(username=username, password_hash=password_hash)
     starter_currency = Currency(player_id=player.id, currency_type="coins", balance=125)
     starter_cat = Cat(player_id=player.id, name="Mochi", attack=12, defense=10, speed=8)
     player.currencies = [starter_currency]
@@ -42,8 +51,7 @@ async def get_or_create_development_player(session: AsyncSession, username: str 
     session.add(player)
     await session.flush()
     await ensure_item_definitions(session)
-    starter_items = [starter_item(item_id, player.id) for item_id in STARTER_ITEM_IDS]
-    session.add_all(starter_items)
+    session.add_all([starter_item(item_id, player.id) for item_id in STARTER_ITEM_IDS])
     await session.flush()
     await session.refresh(player, attribute_names=["cats", "currencies"])
     return player
