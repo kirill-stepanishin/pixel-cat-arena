@@ -25,59 +25,36 @@ export function mountDashboard(root: HTMLElement): void {
           <h1>Build. Battle. Trade.</h1>
         </div>
         <div class="topbar-meta">
-          <span class="status" id="api-status">Loading save…</span>
           <span class="player-tag" id="player-tag">Connecting to arena…</span>
         </div>
       </header>
 
-      <div class="dashboard-grid">
-        <section class="panel hero-panel">
-          <div class="panel-header">
-            <div>
-              <p class="eyebrow">STARTER CAT</p>
-              <h2 id="cat-name">Mochi</h2>
-            </div>
-            <span class="rarity-badge" id="coins-badge">Coins: --</span>
+      <section class="panel battle-panel">
+        <div class="panel-header compact">
+          <div>
+            <p class="eyebrow">ARENA</p>
+            <h2>Cat versus cat</h2>
           </div>
-
-          <div class="cat-stage" aria-label="Cat preview area">
+          <span class="rarity-badge">Automatic PvE</span>
+        </div>
+        <div class="battle-arena">
+          <div class="fighter fighter-player">
+            <div class="fighter-label">
+              <span class="eyebrow">YOUR CAT</span>
+              <h3 id="cat-name">Mochi</h3>
+            </div>
             <div class="cat-avatar" aria-hidden="true">ฅ^•ﻌ•^ฅ</div>
           </div>
-
-          <div class="stat-grid" id="stat-grid"></div>
-          <div id="dashboard-error" class="error-message" aria-live="polite"></div>
-        </section>
-
-        <section class="panel equipment-panel">
-          <div class="panel-header compact">
-            <div>
-              <p class="eyebrow">EQUIPMENT</p>
-              <h3>Loadout</h3>
-            </div>
-          </div>
-          <div id="equipment-slots" class="equipment-grid"></div>
-        </section>
-
-        <section class="panel inventory-panel">
-          <div class="panel-header compact">
-            <div>
-              <p class="eyebrow">INVENTORY</p>
-              <h3>Backpack</h3>
-            </div>
-          </div>
-          <div id="inventory-list" class="inventory-list"></div>
-        </section>
-
-        <aside class="panel preview-panel">
-          <div class="panel-header compact">
-            <div>
-              <p class="eyebrow">ENEMY</p>
+          <div class="versus-badge">VS</div>
+          <div class="fighter fighter-enemy">
+            <div class="fighter-label">
+              <span class="eyebrow">OPPONENT</span>
               <h3 id="enemy-name">Loading enemy…</h3>
             </div>
+            <div class="enemy-body" aria-hidden="true">ฅ◉ﻌ◉ฅ</div>
           </div>
-          <div class="enemy-figure" aria-hidden="true">
-            <div class="enemy-body">◉</div>
-          </div>
+        </div>
+        <div class="battle-controls">
           <ul class="enemy-stats">
             <li id="enemy-attack">ATK --</li>
             <li id="enemy-defense">DEF --</li>
@@ -85,31 +62,68 @@ export function mountDashboard(root: HTMLElement): void {
           </ul>
           <button type="button" class="primary-button fight-button" data-action="fight">Fight</button>
           <div id="battle-result" class="battle-result" aria-live="polite"></div>
-        </aside>
-      </div>
-
-      <section class="panel marketplace-panel">
-        <div class="panel-header compact">
-          <div>
-            <p class="eyebrow">MARKETPLACE</p>
-            <h3>Coming soon</h3>
-          </div>
-        </div>
-        <div class="market-grid">
-          <div class="market-card">
-            <span class="market-label">Tier</span>
-            <strong>Starter gear</strong>
-          </div>
-          <div class="market-card">
-            <span class="market-label">Market</span>
-            <strong>Live listings</strong>
-          </div>
-          <div class="market-card">
-            <span class="market-label">Next phase</span>
-            <strong>Trade and PvP</strong>
-          </div>
         </div>
       </section>
+
+      <div class="dashboard-grid">
+        <section class="panel hero-panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">CAT PAGE</p>
+              <h2>Build your cat</h2>
+            </div>
+            <span class="rarity-badge" id="coins-badge">Coins: --</span>
+          </div>
+
+          <div class="cat-loadout">
+            <div class="cat-stage" aria-label="Cat preview area">
+              <div class="cat-avatar" aria-hidden="true">ฅ^•ﻌ•^ฅ</div>
+              <div class="stat-grid" id="stat-grid"></div>
+            </div>
+            <div class="equipment-column">
+              <p class="eyebrow">EQUIPMENT</p>
+              <div id="equipment-slots" class="equipment-grid"></div>
+            </div>
+          </div>
+
+          <div id="dashboard-error" class="error-message" aria-live="polite"></div>
+        </section>
+
+        <div class="right-column">
+          <section class="panel inventory-panel">
+            <div class="panel-header compact">
+              <div>
+                <p class="eyebrow">INVENTORY</p>
+                <h3>Backpack</h3>
+              </div>
+            </div>
+            <div id="inventory-list" class="inventory-list"></div>
+          </section>
+
+          <section class="panel marketplace-panel">
+            <div class="panel-header compact">
+              <div>
+                <p class="eyebrow">MARKETPLACE</p>
+                <h3>Coming soon</h3>
+              </div>
+            </div>
+            <div class="market-grid">
+              <div class="market-card">
+                <span class="market-label">Tier</span>
+                <strong>Starter gear</strong>
+              </div>
+              <div class="market-card">
+                <span class="market-label">Market</span>
+                <strong>Live listings</strong>
+              </div>
+              <div class="market-card">
+                <span class="market-label">Next phase</span>
+                <strong>Trade and PvP</strong>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
     </main>
   `;
 
@@ -171,13 +185,7 @@ export function mountDashboard(root: HTMLElement): void {
 }
 
 async function refreshDashboard(root: HTMLElement, pendingActionId: string | null): Promise<void> {
-  const statusElement = root.querySelector<HTMLElement>("#api-status");
   const playerTagElement = root.querySelector<HTMLElement>("#player-tag");
-
-  if (statusElement) {
-    statusElement.textContent = "Loading save…";
-    statusElement.dataset.connected = "true";
-  }
 
   try {
     const player = await ensureDevPlayer();
@@ -191,18 +199,8 @@ async function refreshDashboard(root: HTMLElement, pendingActionId: string | nul
     if (playerTagElement) {
       playerTagElement.textContent = `Player ${player.username}`;
     }
-
-    if (statusElement) {
-      statusElement.textContent = "API online";
-      statusElement.dataset.connected = "true";
-    }
   } catch (error) {
     showError(root, error instanceof Error ? error.message : "Unable to load the dev player.");
-
-    if (statusElement) {
-      statusElement.textContent = "API offline";
-      statusElement.dataset.connected = "false";
-    }
 
     if (playerTagElement) {
       playerTagElement.textContent = "Need backend";

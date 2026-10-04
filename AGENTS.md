@@ -6,8 +6,9 @@ description; this file contains implementation detail and agent guidance.
 
 ## Current implementation state
 
-**Status:** Phases 0–3 are complete. The next active slice is transactional
-rewards and progression after a PvE win.
+**Status:** Phases 0–3 are complete. The next active slice is deciding and
+implementing transactional rewards and the corresponding dashboard updates
+after a PvE win.
 
 - [x] Product concept and MVP loop documented
 - [x] Sequential implementation phases defined
@@ -209,6 +210,24 @@ browser never computes the battle result or progression. Complete.
 
 ### Phase 4 — Rewards and progression
 
+Before implementation, decide the reward and UI contract:
+
+- Whether wins against the final Dummy 3 produce repeatable rewards or a
+  one-time completion reward.
+- Currency amounts per enemy and whether item drops are fixed, weighted, or
+  deferred.
+- Whether a reward is created in the battle transaction or claimed later.
+- The idempotency key and API shape that prevent a battle from being rewarded
+  twice.
+- Whether cat XP/levels are included now; if so, define XP for wins and the
+  level thresholds. Losses and draws currently provide neither rewards nor
+  progression.
+- Whether duplicate item instances are allowed and how dropped items are
+  represented and equipped.
+- Whether Phase 4 exposes player battle history and reward history endpoints.
+- The dashboard behavior for reward summaries, coin balance refresh, item-drop
+  notifications, loading/pending states, and reward errors.
+
 Next active phase:
 
 1. Add reward and item-drop definitions.
@@ -218,6 +237,8 @@ Next active phase:
 4. Add a minimal reward response and dashboard notification.
 5. Add cat experience and a minimal level display if time allows.
 6. Add battle and reward history.
+7. Update the dashboard to show authoritative reward results, refreshed
+   currency/inventory, and explicit pending, empty, and error states.
 
 **Exit criteria:** A win produces one persistent reward, which can be equipped
 and used in a later battle.

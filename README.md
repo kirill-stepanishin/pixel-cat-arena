@@ -41,16 +41,22 @@ and desirable in the marketplace.
 ### Fight automatic battles
 
 Battles are short PvE encounters against enemies with different stats and
-difficulty levels. The backend calculates the result, while the browser
-animates the battle:
+difficulty levels. The backend calculates and persists the result, while the
+browser displays the completed outcome:
 
 1. The server snapshots the cat's equipment and stats.
 2. A deterministic battle seed controls turn order and random events.
 3. The fighters attack automatically until one wins.
-4. The server stores the result and awards the reward.
-5. The client replays the event log as a compact Canvas animation.
+4. The server stores the result and advances the player's current opponent
+   after a win.
+5. The dashboard displays the authoritative result and the next opponent.
 
-This keeps combat fair, replayable, and easy to extend to asynchronous PvP.
+Rewards are the next implementation slice. The current PvE flow persists
+battles and events but intentionally grants no currency or item drops yet.
+Battle replay is also deferred; the first dashboard uses a direct Fight action
+and result notification.
+
+This keeps combat fair, deterministic, and easy to extend to asynchronous PvP.
 
 ### Earn, equip, and trade
 
@@ -117,21 +123,29 @@ Tiger Data provides a managed PostgreSQL foundation with standard SQL, which
 keeps the hackathon setup small while leaving room for fast battle history,
 marketplace queries, and time-series gameplay analytics.
 
-## MVP
+## MVP target
 
-The first complete version lets a player create a development account, receive
-a starter cat, equip gear, fight PvE, earn persistent rewards, and buy or sell
-items. Combat, inventory ownership, rewards, and marketplace transfers are
-server-authoritative and stored in Tiger Data.
+The current playable slice lets a player create a development identity, receive
+a starter cat and gear, equip items, and fight a deterministic PvE roster.
+Battles, snapshots, events, equipment, and enemy progression are persisted and
+server-authoritative. The next slice adds transactional rewards and a small
+dashboard notification before marketplace and asynchronous PvP work.
+
+The eventual MVP will let a player earn persistent rewards and buy or sell
+items. Combat, inventory ownership, rewards, and marketplace transfers will
+remain server-authoritative and stored in Tiger Data.
 
 The detailed sequential build plan, schema, API slices, technical decisions,
 and current implementation status live in [`AGENTS.md`](AGENTS.md).
 
 ## Project status
 
-The repository contains a tested backend foundation through player/cat
-persistence and the inventory/equipment API. The next implementation stage is
-the single-page frontend dashboard using placeholder visuals. The development
-frontend will call `POST /dev/player` on startup and retain the returned player
-ID in browser storage. The detailed implementation state is tracked in
-[`AGENTS.md`](AGENTS.md).
+The repository contains a tested backend and frontend through deterministic PvE:
+player/cat persistence, starter inventory, authoritative equipment actions,
+computed stat overlays, a persisted Dummy 1–3 opponent roster, deterministic
+battle seeds and snapshots, ordered battle events, and a direct Fight flow.
+The frontend calls `POST /dev/player` on startup and retains the returned
+player ID in browser storage. Rewards and progression beyond opponent
+advancement are not implemented yet; reward/economy decisions and the
+corresponding dashboard updates are the next planning step. The detailed
+implementation state is tracked in [`AGENTS.md`](AGENTS.md).
