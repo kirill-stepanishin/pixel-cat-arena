@@ -6,8 +6,9 @@ description; this file contains implementation detail and agent guidance.
 
 ## Current implementation state
 
-**Status:** Phase 0 scaffold complete; Tiger Cloud credentials and the first
-migration are the next setup steps.
+**Status:** Phase 1 player and cat persistence is complete; the Phase 2
+inventory/equipment backend foundation is now in place. Frontend inventory
+composition and visual overlays remain.
 
 - [x] Product concept and MVP loop documented
 - [x] Sequential implementation phases defined
@@ -16,7 +17,7 @@ migration are the next setup steps.
 - [x] Backend scaffold
 - [x] Frontend scaffold
 - [x] Tiger Data connection and health check
-- [ ] Player and cat persistence
+- [x] Player and cat persistence
 - [ ] Inventory and equipment
 - [ ] Deterministic PvE
 - [ ] Rewards and progression
@@ -26,9 +27,25 @@ migration are the next setup steps.
 - [ ] Solana wallet and asset integration
 
 The independent backend and frontend shells now exist. Frontend production
-build and backend tests pass. The next task is to configure a real Tiger Cloud
-`DATABASE_URL`, run the first migration, and then begin Phase 1. Do not skip
-ahead to Solana or real-time multiplayer.
+build and backend tests pass. The next implementation stage is the frontend
+completion of Phase 2: a single-page dashboard backed by the player and
+inventory APIs. Tiger Cloud remains optional during local development; do not
+skip ahead to Solana or real-time multiplayer.
+
+Current gameplay defaults are intentionally small: a development player named
+`dev-player`, one cat named Mochi with base stats `12/10/8` for
+attack/defense/speed, `125` starter coins, and four starter items covering the
+four equipment slots. No authentication, battle result, or marketplace
+behavior is assumed yet.
+
+Before adding content, preserve these extension boundaries:
+
+- Keep stats in one validated stat/modifier model; do not scatter fixed stat
+  fields through routes, combat, and UI.
+- Keep cats, enemies, and items data-driven; isolate exceptional behavior in
+  abilities or strategies rather than type checks throughout the codebase.
+- Keep route handlers and UI screens thin; put rules in backend services and
+  presentation state in frontend modules.
 
 ### Scaffold commands
 
@@ -117,48 +134,69 @@ authoritative rewards or combat outcomes.
 
 ### Phase 0 — Foundation
 
-1. Create backend and frontend manifests.
-2. Add environment loading and validate `DATABASE_URL` at startup.
-3. Configure SQLAlchemy for Tiger Data PostgreSQL.
-4. Add Alembic and create the baseline migration.
-5. Add `GET /health` with an explicit database connectivity result.
-6. Add a minimal Vite shell and backend API client.
-7. Add local commands to run both services.
-8. Document Tiger Cloud provisioning and environment setup.
+Backend/frontend manifests, environment loading, SQLAlchemy, Alembic, the
+health endpoint, Vite shell, and local commands are complete.
 
-**Exit criteria:** Both services start, the frontend calls the backend, and
-`/health` verifies Tiger Data connectivity.
+**Exit criteria:** Both services start and `/health` reports database status.
 
 ### Phase 1 — Player and cat
 
-1. Add `players`, `cats`, and `currencies` tables.
-2. Add a temporary development-player creation flow.
-3. Seed one base cat and starter currency.
-4. Add player and cat schemas, services, and routes.
-5. Render the cat and basic HUD in Canvas.
+Player/cat/currency tables, starter data, schemas, services, routes, and the
+validated stat model are complete. The frontend HUD is still placeholder-only.
 
-**Exit criteria:** A new development player can refresh the app and see the
-same cat and balance.
+**Exit criteria:** A development player persists with the same cat and balance.
 
 ### Phase 2 — Items and equipment
 
-1. Add item definitions and item instances.
-2. Add common and rare seed data.
-3. Add head, body, weapon, and accessory slots.
-4. Store Attack, Defense, and Speed on item instances.
-5. Enforce ownership, valid slots, and one item per equipped slot.
-6. Add transparent PNG overlays with shared dimensions and anchors.
-7. Add inventory and equip/unequip screens.
+The backend foundation is complete: item definitions/instances, starter common
+and rare items, four slots, structured stat modifiers, ownership validation,
+and one equipped item per slot.
+
+The next stage completes Phase 2 on the frontend:
+
+1. On startup, call `POST /dev/player` and store the returned player ID in
+   browser storage. Reuse that ID for subsequent loads.
+2. Add separate API, state, rendering, and screen-composition modules.
+3. Build one responsive page containing the cat, computed stats, four equipment
+   slots, an arranged inventory, an enemy/NPC preview area, and a marketplace
+   area that can later become a live view.
+4. Use temporary CSS/Canvas placeholders for the cat and item visuals. Keep
+   backend `visual_key` values stable so real transparent PNGs can replace them.
+5. Display computed totals and bonuses, such as `ATK 15 (+3)`.
+6. Treat `equipped_cat_id` returned by the server as authoritative; refresh
+   inventory and stats after equip/unequip instead of relying on optimistic
+   client state.
+7. Include loading, empty, error, and pending-action states.
 
 **Exit criteria:** Equipping a valid owned item changes both stats and the
-visual cat, and the result survives a refresh.
+placeholder visual composition, survives a refresh, and remains visible on the
+single-page dashboard.
+
+### Frontend product assumptions
+
+- The MVP uses one page rather than separate inventory, marketplace, profile,
+  and arena routes.
+- The development player starts as `dev-player` with Mochi, 125 coins, and the
+  four seeded starter items; this is temporary identity/data, not an auth
+  design.
+- The page presents the player's cat as the primary focus, with inventory,
+  equipment, marketplace access, and the current enemy/NPC in the same view.
+- The first enemy area is a placeholder for a future NPC and later PvP
+  opponent; it is not interactive until the battle phase.
+- The frontend automatically provisions the unauthenticated development player
+  through `POST /dev/player` and stores the returned ID in browser storage.
+- Placeholder visuals are intentional for now; no art asset pipeline is
+  required before the next phase.
+- Stat displays show both totals and equipment contributions.
+- Server responses, not local guesses, define ownership and equipment state.
 
 ### Phase 3 — Deterministic PvE
 
 1. Add enemy definitions and initial enemy seed data.
 2. Build a combat snapshot from cat and equipment.
 3. Generate and persist a battle seed.
-4. Resolve automatic turns in a backend combat service.
+4. Resolve automatic turns in a backend combat service using registered
+   abilities/strategies for special cat and enemy behavior.
 5. Persist the winner and ordered battle events.
 6. Add the battle API and Canvas replay.
 7. Test damage, speed/turn order, victory, defeat, and edge cases.
@@ -269,9 +307,10 @@ Implement API slices in phase order:
 GET  /health
 POST /players
 GET  /players/{player_id}
-GET  /players/{player_id}/inventory
-POST /cats/{cat_id}/equipment
-DELETE /cats/{cat_id}/equipment/{slot}
+GET  /players/{player_id}/items
+GET  /players/items/definitions
+POST /players/{player_id}/cats/{cat_id}/items/{item_id}/equip
+POST /players/{player_id}/cats/{cat_id}/items/{item_id}/unequip
 POST /battles/pve
 GET  /battles/{battle_id}
 POST /marketplace/listings

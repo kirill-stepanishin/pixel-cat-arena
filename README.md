@@ -19,9 +19,13 @@ local game loop is complete.
 
 ### Build a unique cat
 
-Every player starts with one cat. The cat is rendered from a shared base sprite
-and transparent pixel-art equipment layers, so a small art set can create many
-different looks.
+Every development player starts with one cat named Mochi, base stats
+`Attack 12`, `Defense 10`, and `Speed 8`, plus 125 coins and four starter
+items. The MVP frontend is a single-page dashboard:
+the cat is the primary focus, with equipment, inventory, marketplace access,
+and the current enemy/NPC visible without navigating between separate screens.
+The first visual implementation uses CSS/Canvas placeholders; real transparent
+pixel-art layers can replace them later without changing item ownership.
 
 Players can equip one item in each slot:
 
@@ -67,32 +71,30 @@ competition without requiring real-time networking.
 
 ## What the app looks like
 
-Pixel Cat Arena should feel like a compact pixel-art game dashboard rather than
-a large administration app:
+Pixel Cat Arena should feel like a compact one-page pixel-art game dashboard
+rather than a large administration app:
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────┐
-│ PIXEL CAT ARENA              125 coins       Inventory  Marketplace │
+│ PIXEL CAT ARENA              125 coins       Marketplace            │
 ├───────────────────────────────┬─────────────────────────────────────┤
-│                               │  EQUIPMENT                          │
-│          [pixel cat]           │  Head:      Wizard Hat   +2 SPD     │
-│                               │  Body:      Iron Armor   +4 DEF     │
-│       HP 100 / 100             │  Weapon:    Pixel Sword  +5 ATK    │
-│       ATK 18  DEF 12  SPD 9    │  Accessory: Lucky Charm +1 ATK     │
-│                               │                                     │
-│       [FIGHT A BATTLE]         │  [INVENTORY] [MARKETPLACE]         │
+│          [pixel cat]           │  EQUIPMENT / INVENTORY              │
+│       ATK 16 (+4)              │  Head: Woven Cap       +1 SPD       │
+│       DEF 12 (+2)              │  Body: Copper Vest     +2 DEF       │
+│       SPD 10 (+2)              │  Weapon: Pixel Sword   +3 ATK       │
+│                               │  Accessory: Lucky Charm +2         │
+│       [FIGHT A BATTLE]         │  [MARKETPLACE]  [ENEMY / NPC]       │
 └───────────────────────────────┴─────────────────────────────────────┘
 ```
 
-The main screens are:
+The one-page dashboard contains:
 
-- **Arena:** the cat, current stats, enemy preview, and fight button
-- **Battle view:** two pixel fighters, health bars, event messages, and reward
-- **Inventory:** item cards with rarity, stats, ownership, and equip actions
-- **Marketplace:** searchable listings with slot, rarity, price, and purchase
-  action
-- **Profile:** cat progression, battle history, published build, and later
-  wallet information
+- **Cat panel:** placeholder cat visual, computed stats, and future fight action
+- **Equipment/inventory panel:** four slots, item cards, rarity, modifiers, and
+  equip/unequip actions
+- **Marketplace panel:** access point for future browsing and trading
+- **Enemy/NPC panel:** placeholder opponent area that can later support PvE and
+  saved-build PvP
 
 The visual style should use crisp nearest-neighbor pixel art, a limited bright
 color palette, chunky borders, readable stat badges, and lightweight
@@ -127,7 +129,9 @@ and current implementation status live in [`AGENTS.md`](AGENTS.md).
 
 ## Project status
 
-The repository currently contains independent frontend and backend Phase 0
-scaffolds. Configure `DATABASE_URL`, install each app's dependencies, and run
-the health check before beginning player and cat persistence. The detailed
-implementation state is tracked in [`AGENTS.md`](AGENTS.md).
+The repository contains a tested backend foundation through player/cat
+persistence and the inventory/equipment API. The next implementation stage is
+the single-page frontend dashboard using placeholder visuals. The development
+frontend will call `POST /dev/player` on startup and retain the returned player
+ID in browser storage. The detailed implementation state is tracked in
+[`AGENTS.md`](AGENTS.md).
