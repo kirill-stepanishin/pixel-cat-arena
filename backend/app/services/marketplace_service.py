@@ -62,6 +62,8 @@ async def create_listing(
         raise MarketplaceError("owned item not found", 404)
     if item.equipped_cat_id is not None:
         raise MarketplaceError("unequip the item before listing it", 409)
+    if item.solana_mint_address is not None:
+        raise MarketplaceError("this item was exported to Solana; trade it on-chain instead", 409)
     if await has_active_listing(session, item.id):
         raise MarketplaceError("item is already listed", 409)
 

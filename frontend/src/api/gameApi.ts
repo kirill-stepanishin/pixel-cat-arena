@@ -61,6 +61,13 @@ export async function getEnemyProgress(playerId: string): Promise<EnemyProgressR
   return apiFetch<EnemyProgressRead>(`/battles/pve/enemies/${playerId}`);
 }
 
+export async function selectEnemyStage(playerId: string, stage: number): Promise<EnemyRead> {
+  return apiFetch<EnemyRead>("/battles/pve/select", {
+    method: "POST",
+    body: JSON.stringify({ player_id: playerId, stage }),
+  });
+}
+
 export async function equipItem(playerId: string, catId: string, itemId: string): Promise<ItemInstanceRead> {
   return apiFetch<ItemInstanceRead>(`/players/${playerId}/cats/${catId}/items/${itemId}/equip`, {
     method: "POST",
@@ -129,4 +136,31 @@ export function purchaseListing(listingId: string): Promise<ListingRead> {
 
 export function sellItem(itemId: string): Promise<SaleResult> {
   return apiFetch<SaleResult>(`/players/items/${itemId}/sell`, { method: "POST" });
+}
+
+export function mintItemNft(itemId: string, walletAddress: string): Promise<ItemInstanceRead> {
+  return apiFetch<ItemInstanceRead>(`/players/items/${itemId}/mint-nft`, {
+    method: "POST",
+    body: JSON.stringify({ wallet_address: walletAddress }),
+  });
+}
+
+export function getClaimableItems(walletAddress: string): Promise<ItemInstanceRead[]> {
+  const params = new URLSearchParams({ wallet_address: walletAddress });
+  return apiFetch<ItemInstanceRead[]>(`/players/items/claimable?${params.toString()}`);
+}
+
+export function claimItemNft(
+  mintAddress: string,
+  walletAddress: string,
+  signature: string,
+): Promise<ItemInstanceRead> {
+  return apiFetch<ItemInstanceRead>("/players/items/claim", {
+    method: "POST",
+    body: JSON.stringify({
+      mint_address: mintAddress,
+      wallet_address: walletAddress,
+      signature,
+    }),
+  });
 }

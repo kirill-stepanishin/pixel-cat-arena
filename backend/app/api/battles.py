@@ -8,12 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_player, require_player
 from app.db import get_session
 from app.models.player import Player
-from app.schemas.battle import BattleRead, EnemyProgressRead, EnemyRead, PveBattleCreate, RewardRead
+from app.schemas.battle import BattleRead, EnemyProgressRead, EnemyRead, PveBattleCreate, RewardRead, SelectEnemyStage
 from app.services.battle_service import (
     create_pve_battle,
     get_battle,
     get_current_enemy,
     get_enemy_progress,
+    select_enemy_stage,
 )
 
 router = APIRouter(prefix="/battles", tags=["battles"])
@@ -67,6 +68,20 @@ async def read_enemy_progress(
         selected_stage=selected_enemy.stage,
         enemies=[EnemyRead.model_validate(enemy) for enemy in enemies],
     )
+
+
+@router.post("/pve/select", response_model=EnemyRead)
+async def select_enemy(
+    payload: SelectEnemyStage,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    current_player: Annotated[Player, Depends(get_current_player)],
+) -> EnemyRead:
+    require_player(payload.player_id, current_player)
+    enemy = await select_enemy_stage(session, payload.player_id, payload.stage)
+    if enemy is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="stage not unlocked")
+    await session.commit()
+    return EnemyRead.model_validate(enemy)
 
 
 @router.get("/{battle_id}", response_model=BattleRead)

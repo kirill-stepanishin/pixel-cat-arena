@@ -1,8 +1,9 @@
 export function renderCat(
   enemy = false,
   equippedItems: Array<{ visualKey: string; slot: string }> = [],
+  enemyVisualKey?: string,
 ): string {
-  const asset = enemy ? "enemy-cat" : "mochi";
+  const asset = enemy ? enemyVisualKey ?? "enemy-cat" : "mochi";
   const equipmentLayers = layersForSlots(equippedItems, ["body", "accessory", "head", "weapon"]);
   return `
     <span class="cat-composition">

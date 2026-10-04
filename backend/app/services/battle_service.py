@@ -17,14 +17,16 @@ BASE_ENEMY = {"attack": 7, "defense": 8, "speed": 6}
 ENEMY_STAGE_GROWTH = {"attack": 4, "defense": 4, "speed": 1}
 COINS_PER_STAGE = 25
 MAX_HP = 100
+ENEMY_VISUAL_COUNT = 5
 
 
 def enemy_definition(stage: int) -> dict[str, object]:
+    visual_index = ((stage - 1) % ENEMY_VISUAL_COUNT) + 1
     return {
         "id": f"dummy-{stage}",
         "stage": stage,
-        "name": f"Dummy {stage}",
-        "visual_key": "dummy-1",
+        "name": f"Evil Larry {stage}",
+        "visual_key": f"evil-larry-{visual_index}",
         "attack": BASE_ENEMY["attack"] + ENEMY_STAGE_GROWTH["attack"] * (stage - 1),
         "defense": BASE_ENEMY["defense"] + ENEMY_STAGE_GROWTH["defense"] * (stage - 1),
         "speed": BASE_ENEMY["speed"] + ENEMY_STAGE_GROWTH["speed"] * (stage - 1),
@@ -49,6 +51,16 @@ async def get_current_enemy(session: AsyncSession, player_id: str) -> Enemy | No
         player.current_enemy_id = (await ensure_enemy(session, player.highest_unlocked_stage)).id
         await session.flush()
     return await session.get(Enemy, player.current_enemy_id)
+
+
+async def select_enemy_stage(session: AsyncSession, player_id: str, stage: int) -> Enemy | None:
+    player = await session.get(Player, player_id, with_for_update=True)
+    if player is None or stage > player.highest_unlocked_stage:
+        return None
+    enemy = await ensure_enemy(session, stage)
+    player.current_enemy_id = enemy.id
+    await session.flush()
+    return enemy
 
 
 async def get_enemy_progress(session: AsyncSession, player_id: str) -> tuple[int, Enemy, list[Enemy]] | None:
@@ -136,7 +148,7 @@ async def create_pve_battle(
     if result == "player":
         if enemy.stage == player.highest_unlocked_stage:
             player.highest_unlocked_stage += 1
-            player.current_enemy_id = (await ensure_enemy(session, player.highest_unlocked_stage)).id
+            await ensure_enemy(session, player.highest_unlocked_stage)
         await create_reward(session, battle, player, enemy.stage, battle_seed)
     await session.refresh(battle, attribute_names=["events", "reward"])
     return battle

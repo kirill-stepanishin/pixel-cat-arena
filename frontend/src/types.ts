@@ -32,6 +32,8 @@ export interface ItemInstanceRead {
   modifiers: StatModifiers;
   sell_price: number;
   definition: ItemDefinitionRead;
+  solana_mint_address: string | null;
+  solana_owner_wallet: string | null;
 }
 
 export interface CatRead {

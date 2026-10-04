@@ -15,3 +15,8 @@ frontend/dist/
 
 *.sqlite3
 .DS_Store
+*.db
+
+# Solana prototype — never commit real keypairs
+backend/solana_bridge/node_modules/
+backend/solana_bridge/*-keypair.json

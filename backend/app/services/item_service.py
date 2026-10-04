@@ -1,14 +1,18 @@
 from __future__ import annotations
 
-from sqlalchemy import delete, select, update
+import asyncio
+
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.config import get_settings
 from app.content.items import ITEM_TEMPLATES, sell_value
 from app.models.battle import Reward
 from app.models.item import ItemDefinition, ItemInstance
 from app.models.marketplace import MarketplaceListing
 from app.models.player import Cat, Currency
+from app.services import solana_bridge_service
 
 
 class ItemListedError(Exception):
@@ -158,6 +162,8 @@ async def sell_item(session: AsyncSession, player_id: str, item_id: str) -> tupl
         raise ItemSaleError("owned item not found", 404)
     if item.equipped_cat_id is not None:
         raise ItemSaleError("unequip the item before selling it", 409)
+    if item.solana_mint_address is not None:
+        raise ItemSaleError("this item was exported to Solana; trade it on-chain instead", 409)
     if await session.scalar(
         select(MarketplaceListing.id).where(
             MarketplaceListing.item_instance_id == item.id,
@@ -181,3 +187,127 @@ async def sell_item(session: AsyncSession, player_id: str, item_id: str) -> tupl
     await session.delete(item)
     await session.flush()
     return item, price, currency.balance
+
+
+class SolanaExportError(Exception):
+    def __init__(self, detail: str, status_code: int) -> None:
+        super().__init__(detail)
+        self.detail = detail
+        self.status_code = status_code
+
+
+async def mint_item_nft(session: AsyncSession, player_id: str, item_id: str, wallet_address: str) -> ItemInstance:
+    """Export a legendary item to Solana as a real devnet NFT. The item stays equippable
+    in-game; sell/list are blocked going forward (see sell_item / marketplace_service)."""
+    item = (
+        await session.execute(
+            select(ItemInstance)
+            .options(selectinload(ItemInstance.definition))
+            .where(ItemInstance.id == item_id, ItemInstance.owner_id == player_id)
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if item is None:
+        raise SolanaExportError("owned item not found", 404)
+    if item.definition.rarity != "legendary":
+        raise SolanaExportError("only legendary items can be exported to Solana", 409)
+    if item.solana_mint_address is not None:
+        raise SolanaExportError("item is already exported to Solana", 409)
+    if await session.scalar(
+        select(MarketplaceListing.id).where(
+            MarketplaceListing.item_instance_id == item.id,
+            MarketplaceListing.status == "active",
+        )
+    ):
+        raise SolanaExportError("cancel the marketplace listing before exporting this item", 409)
+
+    settings = get_settings()
+    metadata_uri = f"{settings.solana_metadata_base_url}/players/items/{item.id}/metadata.json"
+    try:
+        result = await solana_bridge_service.mint_nft(
+            owner_wallet=wallet_address,
+            name=item.definition.name,
+            symbol="PCA",
+            metadata_uri=metadata_uri,
+        )
+    except solana_bridge_service.SolanaBridgeError as exc:
+        raise SolanaExportError(f"mint failed: {exc}", 502) from exc
+
+    item.solana_mint_address = result["mintAddress"]
+    item.solana_owner_wallet = wallet_address
+    await session.flush()
+    return item
+
+
+async def claim_item_nft(
+    session: AsyncSession,
+    claiming_player_id: str,
+    mint_address: str,
+    wallet_address: str,
+    signature: str,
+) -> ItemInstance:
+    """Reassign an exported item to whoever currently proves on-chain ownership of its
+    NFT. Signature is a free message signature (no transaction, no gas, no funds)."""
+    message = solana_bridge_service.claim_message(mint_address)
+    if not solana_bridge_service.verify_wallet_signature(wallet_address, message, signature):
+        raise SolanaExportError("signature does not match the claiming wallet", 401)
+
+    try:
+        holds = await solana_bridge_service.check_holder(mint_address, wallet_address)
+    except solana_bridge_service.SolanaBridgeError as exc:
+        raise SolanaExportError(f"ownership check failed: {exc}", 502) from exc
+    if not holds:
+        raise SolanaExportError("that wallet does not currently hold this NFT", 409)
+
+    item = (
+        await session.execute(
+            select(ItemInstance)
+            .options(selectinload(ItemInstance.definition))
+            .where(ItemInstance.solana_mint_address == mint_address)
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if item is None:
+        raise SolanaExportError("no item is linked to this mint address", 404)
+
+    next_number = await session.scalar(
+        select(func.max(ItemInstance.instance_number)).where(
+            ItemInstance.owner_id == claiming_player_id,
+            ItemInstance.item_definition_id == item.item_definition_id,
+        )
+    )
+    item.owner_id = claiming_player_id
+    item.instance_number = (next_number or 0) + 1
+    item.equipped_cat_id = None
+    item.solana_owner_wallet = wallet_address
+    await session.flush()
+    return item
+
+
+async def list_claimable_items(
+    session: AsyncSession, wallet_address: str, exclude_owner_id: str
+) -> list[ItemInstance]:
+    """Items exported to Solana that the given wallet currently holds on-chain but
+    this account doesn't yet own in-game. Read-only — no signature required to browse,
+    only to actually claim via claim_item_nft."""
+    candidates = (
+        await session.execute(
+            select(ItemInstance)
+            .options(selectinload(ItemInstance.definition))
+            .where(
+                ItemInstance.solana_mint_address.is_not(None),
+                ItemInstance.owner_id != exclude_owner_id,
+            )
+        )
+    ).scalars().all()
+    if not candidates:
+        return []
+
+    holds = await asyncio.gather(
+        *(
+            solana_bridge_service.check_holder(item.solana_mint_address, wallet_address)
+            for item in candidates
+        ),
+        return_exceptions=True,
+    )
+    return [item for item, holds_it in zip(candidates, holds) if holds_it is True]

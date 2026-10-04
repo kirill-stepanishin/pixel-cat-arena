@@ -59,6 +59,10 @@ class ItemInstance(Base):
         nullable=True,
         index=True,
     )
+    # Set once an item is exported to Solana as an NFT. From that point on, the item's
+    # only trade path is on-chain; in-game sell/list are blocked (see item_service).
+    solana_mint_address: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True)
+    solana_owner_wallet: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

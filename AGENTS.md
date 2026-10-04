@@ -7,9 +7,12 @@ next work.
 ## Current implementation state
 
 **Status:** Phases 0-8 are complete: accounts, PvE, async PvP, instant selling,
-and the fixed-price marketplace all work locally. The next goal is Phase 9,
-the two-profile demo verification and targeted polish. Hosting is explicitly
-out of scope for this milestone.
+and the fixed-price marketplace all work locally. On the `solana-nft-prototype`
+branch, legendary items can additionally be exported as real Solana devnet
+NFTs and claimed back in-game by wallet signature (see Phase 10a below); this
+has been manually verified end-to-end with a real Phantom wallet on devnet.
+The next goal is Phase 9, the two-profile demo verification and targeted
+polish. Public hosting is explicitly out of scope for this milestone.
 
 - [x] Product concept and MVP loop documented
 - [x] Backend and frontend scaffolds
@@ -28,7 +31,9 @@ out of scope for this milestone.
 - [ ] Local two-profile smoke test (separate profiles or incognito; tabs share a cookie)
 - [x] Inventory/equipment/market UI polish (tooltips, comparisons, filters, toasts)
 - [ ] Further visual polish and analytics
-- [ ] Solana NFT integration
+- [x] Solana NFT integration (devnet prototype on `solana-nft-prototype`
+  branch: export legendary items as real NFTs, equip while minted, blocked
+  resale, signature-based claim)
 
 ### What works now
 
@@ -76,6 +81,22 @@ currency rows, moves the coins and the item, and issues the buyer a new
 instance number. Self-purchases, double purchases, and insufficient funds are
 rejected, and buying needs a confirmation click.
 
+On the `solana-nft-prototype` branch, a legendary item's card gains an
+"⛓ Export" action that mints a real devnet NFT to a pasted wallet address
+(Metaplex Token Metadata via `solana_bridge/mint-item-nft.mjs`, run as a Node
+child process with a backend-held treasury keypair as fee/rent payer — the
+player's wallet never needs devnet SOL or to sign the mint). The item stays
+equippable and battle-usable after minting, but `sell` and `list` are
+permanently blocked once `solana_mint_address` is set — item trading for that
+instance moves on-chain. A "Claim from Solana" panel lets any player paste a
+wallet address to see unclaimed items currently minted to it
+(`check-holder.mjs` verifies live token-account ownership), then claim one by
+signing a free `signMessage` challenge with Phantom (`frontend/src/solana/phantom.ts`)
+— no transaction, no gas. The backend verifies the signature against the
+claimed wallet and the on-chain holder before reassigning `owner_id`, so
+in-game ownership always follows real on-chain NFT ownership without the
+claimer needing to submit a transaction.
+
 ## Technical stack
 
 - Python 3.12
@@ -116,7 +137,9 @@ make test
 - Keep combat, ownership, rewards, sale prices, and marketplace transfers
   server-authoritative.
 - Keep equipment composition player-only; enemy sprites are standalone.
-- Do not add Solana as a runtime requirement.
+- Core gameplay (PvE, PvP, selling, marketplace) must never require a wallet
+  or Solana connectivity; the Solana export/claim feature is strictly
+  additive and only touches items the player opts to export.
 - Do not build live networking; asynchronous saved-build PvP is sufficient.
 - Do not add timed bidding before fixed-price trading is reliable.
 
@@ -211,12 +234,40 @@ authoritative result without mutating the opponent's current inventory.
    account identity, inventory sorting/filtering, and battle feedback.
 5. Keep a repeatable local demo script and reset procedure.
 
-### Phase 10 — Future hosting and Solana
+### Phase 10 — Future hosting, plus the Solana prototype
 
-Deferred. Public hosting, PostgreSQL migration, wallet connection, verified
-wallet association, and legendary NFT ownership are future work. None is
-required for the local demo. If hosting is later requested, first migrate the
-database and test marketplace concurrency before exposing the app publicly.
+Public hosting, PostgreSQL migration, and broader wallet features (multi-chain
+support, wallet-based login, marketplace priced in SOL) remain deferred and
+are not required for the local demo.
+
+The devnet NFT export/claim prototype itself is **done** on the
+`solana-nft-prototype` branch (not yet merged to `main`):
+
+1. [x] Add `solana_mint_address` / `solana_owner_wallet` columns to
+   `item_instances` via migration.
+2. [x] Add `solana_bridge/` Node scripts (`mint-item-nft.mjs`,
+   `check-holder.mjs`) that mint real devnet NFTs (Metaplex Token Metadata)
+   and verify live token-account ownership, invoked as subprocesses from
+   `app/services/item_service.py`.
+3. [x] Add `POST /players/items/{item_id}/mint-nft` (legendary-only, owner-only,
+   blocks re-export) using a backend-held treasury keypair as fee/rent payer.
+4. [x] Block `sell` and `marketplace/listings` for any item with a
+   `solana_mint_address` set.
+5. [x] Add `GET /players/items/claimable?wallet=...` (read-only holder lookup)
+   and `POST /players/items/claim` (wallet-signature verified ownership
+   transfer, no on-chain transaction from the claimer).
+6. [x] Add frontend Export button/sub-panel, minted-item badge with Explorer
+   link, and a "Claim from Solana" panel using a minimal Phantom
+   `connect()`/`signMessage()` wrapper (`frontend/src/solana/phantom.ts`).
+7. [x] Manually verified end-to-end on devnet with a real Phantom wallet:
+   mint to a real address, confirm on Solana Explorer, claim from a second
+   account via signature, confirm `owner_id` transferred while the mint
+   address/wallet stayed intact.
+
+If hosting is later requested, first migrate the database and test
+marketplace concurrency before exposing the app publicly. Merging the Solana
+branch to `main` and funding/documenting a longer-lived treasury keypair are
+still open follow-ups.
 
 ## Data model
 
@@ -226,7 +277,7 @@ database and test marketplace concurrency before exposing the app publicly.
 | `cats` | Player cat and base stats |
 | `currencies` | Player balance |
 | `item_definitions` | Static item type, slot, rarity, visual, and roll rules |
-| `item_instances` | Owned item, rolled modifiers, and equipment state |
+| `item_instances` | Owned item, rolled modifiers, equipment state, and (on `solana-nft-prototype`) `solana_mint_address`/`solana_owner_wallet` once exported |
 | `enemies` | PvE enemy definitions |
 | `battles` | Participants, seed, snapshots, result, and timestamps |
 | `battle_events` | Ordered persisted combat events |
@@ -271,6 +322,15 @@ POST /marketplace/listings
 GET  /marketplace/listings?scope=others|mine&slot=&rarity=
 POST /marketplace/listings/{listing_id}/purchase
 POST /marketplace/listings/{listing_id}/cancel
+```
+
+On `solana-nft-prototype` only (devnet prototype, not merged to `main`):
+
+```text
+POST /players/items/{item_id}/mint-nft    export a legendary item as a devnet NFT
+GET  /players/items/claimable?wallet=...  items currently minted to a wallet, claimable by anyone else
+POST /players/items/claim                 wallet-signature verified ownership transfer
+GET  /players/items/{item_id}/metadata.json  Metaplex-compatible metadata served by the backend
 ```
 
 Remaining work is Phase 9 (demo verification and script) and the deferred

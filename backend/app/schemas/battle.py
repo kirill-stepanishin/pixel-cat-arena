@@ -13,6 +13,11 @@ class PveBattleCreate(BaseModel):
     enemy_stage: int | None = Field(default=None, ge=1)
 
 
+class SelectEnemyStage(BaseModel):
+    player_id: str = Field(min_length=1)
+    stage: int = Field(ge=1)
+
+
 class EnemyRead(BaseModel):
     id: str
     stage: int

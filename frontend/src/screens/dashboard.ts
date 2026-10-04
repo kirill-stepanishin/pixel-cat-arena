@@ -7,9 +7,11 @@ import {
   publishBuild,
   challengePlayer,
   resolveChallenge,
+  selectEnemyStage,
 } from "../api/gameApi";
 import { getCurrentPlayer, logout } from "../api/authApi";
 import { getListedItem, marketplaceMarkup, mountMarketplace, refreshMarketplace, refreshMyListings } from "./marketplace";
+import { mountSolana, solanaExplorerUrl, solanaMarkup } from "./solana";
 import { escapeHtml, initTooltips, itemTip, slotIcon, statChips, tipAttr, toast, uiContext } from "./ui";
 import { renderCat } from "../rendering/placeholders";
 import { getEquippedItemsForCat, SLOT_ORDER, sumBonusForStat } from "../state/playerState";
@@ -91,7 +93,6 @@ export function mountDashboard(root: HTMLElement): void {
             <div class="fighter-label">
               <span class="eyebrow">OPPONENT</span>
               <h3 id="enemy-name">Loading opponent…</h3>
-              <select id="enemy-selector" class="enemy-selector" aria-label="Choose defeated enemy"></select>
             </div>
           </div>
           <ul class="arena-stats arena-stats-enemy">
@@ -102,35 +103,47 @@ export function mountDashboard(root: HTMLElement): void {
         </div>
         <div class="battle-feed">
           <p id="battle-playout" class="battle-ticker" aria-live="polite">Choose an opponent and press Fight.</p>
-          <button type="button" class="ghost-button skip-button" data-action="skip-battle" hidden>Skip</button>
         </div>
-        <div class="battle-controls" id="pve-controls">
-          <div class="battle-action">
-            <button type="button" class="primary-button fight-button" data-action="fight">Fight</button>
-          </div>
-        </div>
-        <div class="pvp-controls is-hidden" id="pvp-panel">
-          <div class="pvp-step">
-            <div class="pvp-step-head"><span class="step-number">1</span>Publish your build</div>
-            <button type="button" class="ghost-button" id="publish-build" data-label="Publish build">Publish build</button>
-            <p class="step-caption" id="published-build-status">Not published yet</p>
-          </div>
-          <div class="pvp-step">
-            <div class="pvp-step-head"><span class="step-number">2</span>Pick an opponent</div>
-            <div class="input-group">
-              <input id="challenge-username" placeholder="Opponent username" autocomplete="off" aria-label="Opponent username">
-              <button type="button" class="ghost-button" id="challenge-player" data-label="Challenge">Challenge</button>
+        <div class="battle-footer">
+          <div class="battle-controls" id="pve-controls">
+            <div class="enemy-picker">
+              <p class="enemy-progress" id="enemy-progress">
+                <span class="enemy-progress-label" id="enemy-progress-label">Stage --/--</span>
+                <span class="enemy-progress-track"><span class="enemy-progress-fill" id="enemy-progress-fill"></span></span>
+              </p>
+              <div class="enemy-picker-row">
+                <select id="enemy-selector" class="enemy-selector" aria-label="Choose defeated enemy"></select>
+                <button type="button" class="ghost-button next-enemy-button" data-action="next-enemy" hidden>Next ▸</button>
+              </div>
             </div>
-            <p class="step-caption" id="challenge-status">They must publish a build too</p>
+            <div class="battle-action">
+              <button type="button" class="primary-button fight-button" data-action="fight">Fight</button>
+              <button type="button" class="ghost-button skip-button" data-action="skip-battle" hidden>Skip</button>
+            </div>
           </div>
-          <div class="pvp-step">
-            <div class="pvp-step-head"><span class="step-number">3</span>Fight</div>
-            <button type="button" class="primary-button" id="resolve-challenge" data-label="Start match" disabled>Start match</button>
-            <p class="step-caption" id="pvp-status">Create a challenge first</p>
+          <div class="pvp-controls is-hidden" id="pvp-panel">
+            <div class="pvp-step">
+              <div class="pvp-step-head"><span class="step-number">1</span>Publish your build</div>
+              <button type="button" class="ghost-button" id="publish-build" data-label="Publish build">Publish build</button>
+              <p class="step-caption" id="published-build-status">Not published yet</p>
+            </div>
+            <div class="pvp-step">
+              <div class="pvp-step-head"><span class="step-number">2</span>Pick an opponent</div>
+              <div class="input-group">
+                <input id="challenge-username" placeholder="Opponent username" autocomplete="off" aria-label="Opponent username">
+                <button type="button" class="ghost-button" id="challenge-player" data-label="Challenge">Challenge</button>
+              </div>
+              <p class="step-caption" id="challenge-status">They must publish a build too</p>
+            </div>
+            <div class="pvp-step">
+              <div class="pvp-step-head"><span class="step-number">3</span>Fight</div>
+              <button type="button" class="primary-button" id="resolve-challenge" data-label="Start match" disabled>Start match</button>
+              <p class="step-caption" id="pvp-status">Create a challenge first</p>
+            </div>
           </div>
-        </div>
-        <div id="battle-summary" class="result-card" data-state="idle" aria-live="polite">
-          <p class="result-idle">Battle results will appear here.</p>
+          <div id="battle-summary" class="result-card" data-state="idle" aria-live="polite">
+            <p class="result-idle">Battle results will appear here.</p>
+          </div>
         </div>
       </section>
 
@@ -183,6 +196,7 @@ export function mountDashboard(root: HTMLElement): void {
         </div>
       </div>
       ${marketplaceMarkup()}
+      ${solanaMarkup()}
     </main>
   `;
 
@@ -197,6 +211,7 @@ export function mountDashboard(root: HTMLElement): void {
     const modeButton = target.closest<HTMLButtonElement>("[data-mode]");
     if (modeButton) {
       arenaMode = modeButton.dataset.mode === "pvp" ? "pvp" : "pve";
+      root.dataset.arenaMode = arenaMode;
       root.querySelectorAll("[data-mode]").forEach((button) => {
         button.classList.toggle("active", button === modeButton);
       });
@@ -219,6 +234,8 @@ export function mountDashboard(root: HTMLElement): void {
         if (kind) kind.textContent = "ENEMY";
         const selector = root.querySelector<HTMLSelectElement>("#enemy-selector");
         if (selector) selector.hidden = false;
+        const progress = root.querySelector<HTMLElement>("#enemy-progress");
+        if (progress) progress.hidden = false;
         void refreshDashboard(root, null);
       }
       return;
@@ -236,6 +253,20 @@ export function mountDashboard(root: HTMLElement): void {
 
     if (action === "skip-battle") {
       skipPlayback?.();
+      return;
+    }
+
+    if (action === "next-enemy") {
+      const nextStage = Number(actionButton.dataset.stage);
+      if (!Number.isFinite(nextStage)) return;
+      actionButton.disabled = true;
+      try {
+        const player = await getCurrentPlayer();
+        await selectEnemyStage(player.id, nextStage);
+      } catch (error) {
+        toast(error instanceof Error ? error.message : "Could not select opponent.", "error");
+      }
+      await refreshDashboard(root, null);
       return;
     }
 
@@ -296,12 +327,32 @@ export function mountDashboard(root: HTMLElement): void {
   initTooltips();
   root.addEventListener("change", (event) => {
     const target = event.target as HTMLSelectElement;
-    if (target.id === "inventory-slot") inventoryView.slot = target.value;
-    else if (target.id === "inventory-sort") inventoryView.sort = target.value;
-    else return;
-    rerenderInventory();
+    if (target.id === "inventory-slot") {
+      inventoryView.slot = target.value;
+      rerenderInventory();
+      return;
+    }
+    if (target.id === "inventory-sort") {
+      inventoryView.sort = target.value;
+      rerenderInventory();
+      return;
+    }
+    if (target.id === "enemy-selector") {
+      const stage = Number(target.value);
+      if (!Number.isFinite(stage)) return;
+      void (async () => {
+        const player = await getCurrentPlayer();
+        try {
+          await selectEnemyStage(player.id, stage);
+        } catch (error) {
+          toast(error instanceof Error ? error.message : "Could not select opponent.", "error");
+        }
+        await refreshDashboard(root, null);
+      })();
+    }
   });
   mountMarketplace(root, () => refreshDashboard(root, null));
+  mountSolana(root, () => refreshDashboard(root, null));
   void refreshDashboard(root, null).then(() => refreshMarketplace(root));
 }
 
@@ -393,6 +444,10 @@ function renderPvpOpponent(root: HTMLElement, build: BuildSnapshotRead): void {
   if (defense) defense.textContent = `DEF ${build.cat.defense}`;
   if (speed) speed.textContent = `SPD ${build.cat.speed}`;
   if (selector) selector.hidden = true;
+  const nextButton = root.querySelector<HTMLButtonElement>(".next-enemy-button");
+  if (nextButton) nextButton.hidden = true;
+  const progress = root.querySelector<HTMLElement>("#enemy-progress");
+  if (progress) progress.hidden = true;
   const visuals = build.equipment
     .filter((item) => item.visual_key)
     .map((item) => ({ visualKey: item.visual_key!, slot: item.slot }));
@@ -463,7 +518,23 @@ function renderPlayerView(
   if (enemyAttack) enemyAttack.textContent = `ATK ${currentEnemy?.attack ?? "--"}`;
   if (enemyDefense) enemyDefense.textContent = `DEF ${currentEnemy?.defense ?? "--"}`;
   if (enemySpeed) enemySpeed.textContent = `SPD ${currentEnemy?.speed ?? "--"}`;
+  if ((root.dataset.arenaMode ?? "pve") === "pve") {
+    const enemyBody = root.querySelector<HTMLElement>(".fighter-enemy .enemy-body");
+    if (enemyBody) {
+      enemyBody.innerHTML = renderCat(true, [], currentEnemy?.visual_key);
+      enemyBody.classList.remove("is-mirrored");
+    }
+  }
   renderEnemySelector(root, enemyProgress);
+  renderEnemyProgressBar(root, enemyProgress);
+
+  const nextButton = root.querySelector<HTMLButtonElement>(".next-enemy-button");
+  if (nextButton) {
+    const hasNext = enemyProgress.highest_unlocked_stage > enemyProgress.selected_stage;
+    nextButton.hidden = !hasNext;
+    nextButton.disabled = false;
+    if (hasNext) nextButton.dataset.stage = String(enemyProgress.selected_stage + 1);
+  }
 
   if (catNameElement) {
     catNameElement.textContent = cat?.name ?? "No cat yet";
@@ -543,6 +614,18 @@ function renderEnemySelector(root: HTMLElement, progress: EnemyProgressRead): vo
   selector.innerHTML = progress.enemies.map((enemy) =>
     `<option value="${enemy.stage}" ${enemy.stage === progress.selected_stage ? "selected" : ""}>${enemy.name}</option>`
   ).join("");
+}
+
+function renderEnemyProgressBar(root: HTMLElement, progress: EnemyProgressRead): void {
+  const label = root.querySelector<HTMLElement>("#enemy-progress-label");
+  const fill = root.querySelector<HTMLElement>("#enemy-progress-fill");
+  if (!label || !fill) return;
+
+  label.textContent = `Stage ${progress.selected_stage}/${progress.highest_unlocked_stage}`;
+  const percent = progress.highest_unlocked_stage > 0
+    ? Math.round((progress.selected_stage / progress.highest_unlocked_stage) * 100)
+    : 0;
+  fill.style.width = `${Math.min(100, Math.max(0, percent))}%`;
 }
 
 function createBattlePlayback(root: HTMLElement, battle: BattleRead): {
@@ -725,13 +808,22 @@ function renderInventoryList(
     const listing = getListedItem(item.id);
     const equipped = uiContext.equippedBySlot.get(item.definition.slot);
     const pending = pendingActionId === item.id;
+    const minted = Boolean(item.solana_mint_address);
+    const exportable = !minted && !listing && item.definition.rarity === "legendary";
+    const equipButton = `<button type="button" class="primary-button" data-action="equip" data-item-id="${item.id}" data-player-id="${playerId}" data-cat-id="${cat?.id ?? ""}" ${pending || !cat ? "disabled" : ""}>${pending ? "Updating…" : "Equip"}</button>`;
     const actions = listing
       ? `<span class="listed-badge">Listed · ${listing.price} coins</span>
          <button type="button" class="ghost-button" data-cancel-listing="${listing.id}">Cancel listing</button>`
+      : minted
+      ? `<div class="card-actions" data-when="idle">
+           ${equipButton}
+           <a class="solana-badge" href="${solanaExplorerUrl(item.solana_mint_address!)}" target="_blank" rel="noopener" ${tipAttr("Minted as a real Solana devnet NFT — trade it on-chain instead of in-game.")}>⛓ On Solana</a>
+         </div>`
       : `<div class="card-actions" data-when="idle">
-           <button type="button" class="primary-button" data-action="equip" data-item-id="${item.id}" data-player-id="${playerId}" data-cat-id="${cat?.id ?? ""}" ${pending || !cat ? "disabled" : ""}>${pending ? "Updating…" : "Equip"}</button>
+           ${equipButton}
            <button type="button" class="ghost-button" data-card-mode="sell" ${tipAttr(`Sell instantly for <b>${item.sell_price}</b> coins`)}>Sell <span class="coin-dot" aria-hidden="true"></span>${item.sell_price}</button>
            <button type="button" class="ghost-button" data-card-mode="list" ${tipAttr("List on the marketplace for your own price")}>List</button>
+           ${exportable ? `<button type="button" class="ghost-button" data-card-mode="export" ${tipAttr("Mint as a real Solana NFT. Stays equippable, but can no longer be sold or listed in-game.")}>⛓ Export</button>` : ""}
          </div>
          <div class="card-sub" data-when="sell">
            <p>Sell for <b class="price-inline"><span class="coin-dot" aria-hidden="true"></span>${item.sell_price}?</b></p>
@@ -746,7 +838,15 @@ function renderInventoryList(
              <button type="button" class="primary-button" data-list-confirm data-item-id="${item.id}">List</button>
              <button type="button" class="ghost-button" data-card-mode="">Back</button>
            </div>
-         </div>`;
+         </div>
+         ${exportable ? `<div class="card-sub" data-when="export">
+           <p>Mint on Solana devnet. It stays equippable, but can never be sold or listed in-game again — trade moves on-chain.</p>
+           <input type="text" data-export-wallet placeholder="Devnet wallet address" aria-label="Wallet address to receive the NFT" />
+           <div class="card-sub-row">
+             <button type="button" class="primary-button" data-export-confirm data-item-id="${item.id}">Mint</button>
+             <button type="button" class="ghost-button" data-card-mode="">Back</button>
+           </div>
+         </div>` : ""}`;
 
     return `
       <article class="inventory-card ${rarity}" data-card-state="" ${tipAttr(itemTip(item, equipped ? `<div class="tip-sub">Compared with equipped ${escapeHtml(equipped.definition.name)}</div>` : ""))}>

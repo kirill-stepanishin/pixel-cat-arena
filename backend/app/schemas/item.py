@@ -44,6 +44,8 @@ class ItemInstanceRead(BaseModel):
     created_at: datetime
     modifiers: StatModifiers
     definition: ItemDefinitionRead
+    solana_mint_address: str | None = None
+    solana_owner_wallet: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

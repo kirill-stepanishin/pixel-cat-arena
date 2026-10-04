@@ -95,7 +95,7 @@ def test_pve_endpoint_persists_battle_and_events(monkeypatch) -> None:
     assert lookup.json()["seed"] == battle["seed"]
 
 
-def test_current_enemy_is_persisted_and_advances_after_a_win(monkeypatch) -> None:
+def test_current_enemy_stays_until_explicitly_selected_after_a_win(monkeypatch) -> None:
     monkeypatch.setattr(db, "session_factory", _build_session_factory())
     client = TestClient(app)
     player = client.post("/dev/player").json()
@@ -124,7 +124,19 @@ def test_current_enemy_is_persisted_and_advances_after_a_win(monkeypatch) -> Non
     finally:
         monkeypatch.setattr(battle_service, "resolve_battle", original_resolver)
 
+    # Winning unlocks the next stage but does not auto-switch the active opponent.
+    assert client.get(f"/battles/pve/current/{player['id']}").json()["id"] == "dummy-1"
+    progress = client.get(f"/battles/pve/enemies/{player['id']}").json()
+    assert progress["highest_unlocked_stage"] == 2
+    assert progress["selected_stage"] == 1
+
+    select = client.post("/battles/pve/select", json={"player_id": player["id"], "stage": 2})
+    assert select.status_code == 200
+    assert select.json()["id"] == "dummy-2"
     assert client.get(f"/battles/pve/current/{player['id']}").json()["id"] == "dummy-2"
+
+    rejected = client.post("/battles/pve/select", json={"player_id": player["id"], "stage": 99})
+    assert rejected.status_code == 404
 
 
 def test_scaled_enemy_selection_and_repeatable_stage_rewards(monkeypatch) -> None:
