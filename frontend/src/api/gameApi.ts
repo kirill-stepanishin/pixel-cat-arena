@@ -1,5 +1,11 @@
 import { apiFetch } from "./client";
-import type { BattleRead, EnemyRead, ItemInstanceRead, PlayerWithDetails } from "../types";
+import type {
+  BattleRead,
+  EnemyProgressRead,
+  EnemyRead,
+  ItemInstanceRead,
+  PlayerWithDetails,
+} from "../types";
 
 const STORAGE_KEY = "pixel-cat-arena:player-id";
 
@@ -39,11 +45,15 @@ export async function getCurrentEnemy(playerId: string): Promise<EnemyRead> {
   return apiFetch<EnemyRead>(`/battles/pve/current/${playerId}`);
 }
 
-export async function fightPve(playerId: string): Promise<BattleRead> {
+export async function fightPve(playerId: string, enemyStage?: number): Promise<BattleRead> {
   return apiFetch<BattleRead>("/battles/pve", {
     method: "POST",
-    body: JSON.stringify({ player_id: playerId }),
+    body: JSON.stringify({ player_id: playerId, enemy_stage: enemyStage }),
   });
+}
+
+export async function getEnemyProgress(playerId: string): Promise<EnemyProgressRead> {
+  return apiFetch<EnemyProgressRead>(`/battles/pve/enemies/${playerId}`);
 }
 
 export async function equipItem(playerId: string, catId: string, itemId: string): Promise<ItemInstanceRead> {

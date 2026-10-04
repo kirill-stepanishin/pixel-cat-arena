@@ -406,6 +406,24 @@ h1 {
   text-align: right;
 }
 
+.enemy-selector {
+  display: block;
+  max-width: 180px;
+  margin-top: 0.45rem;
+  padding: 0.4rem 0.55rem;
+  border: 2px solid #f08b63;
+  border-radius: 10px;
+  background: #fff6c9;
+  color: #693c86;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.fighter-enemy .enemy-selector {
+  margin-left: auto;
+}
+
 .versus-badge {
   display: grid;
   place-items: center;
@@ -446,6 +464,47 @@ h1 {
 
 .battle-result[data-result="enemy"] {
   color: #c74d76;
+}
+
+.health-bars {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.8rem;
+}
+
+.health-bars > div {
+  display: grid;
+  grid-template-columns: 4rem 1fr;
+  align-items: center;
+  gap: 0.5rem;
+  color: #8e5a70;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+progress {
+  width: 100%;
+  height: 0.8rem;
+  accent-color: #ff718f;
+}
+
+.battle-playout,
+.battle-reward {
+  min-height: 1.3rem;
+  margin-top: 0.55rem;
+  color: #986879;
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.battle-reward {
+  color: #e66d68;
+}
+
+.skip-button {
+  display: block;
+  margin: 0.65rem auto 0;
 }
 
 .enemy-stats {

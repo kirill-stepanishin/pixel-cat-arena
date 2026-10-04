@@ -59,6 +59,7 @@ export interface PlayerWithDetails extends PlayerRead {
 
 export interface EnemyRead {
   id: string;
+  stage: number;
   name: string;
   visual_key: string;
   attack: number;
@@ -68,7 +69,16 @@ export interface EnemyRead {
 
 export interface BattleRead {
   id: string;
+  enemy_stage: number;
   result: "player" | "enemy" | "draw";
+  events: BattleEventRead[];
+  player_snapshot: {
+    name: string;
+    attack: number;
+    defense: number;
+    speed: number;
+    max_hp: number;
+  };
   enemy_snapshot: {
     name: string;
     attack: number;
@@ -76,4 +86,30 @@ export interface BattleRead {
     speed: number;
     max_hp: number;
   };
+  reward: RewardRead | null;
+}
+
+export interface BattleEventRead {
+  sequence: number;
+  turn_number: number;
+  event_type: "attack" | "draw" | "victory" | "defeat";
+  attacker: "player" | "enemy" | null;
+  damage: number;
+  player_hp: number;
+  enemy_hp: number;
+  elapsed_time: number;
+}
+
+export interface RewardRead {
+  id: string;
+  battle_id: string;
+  player_id: string;
+  currency_amount: number;
+  item_instance_id: string | null;
+}
+
+export interface EnemyProgressRead {
+  highest_unlocked_stage: number;
+  selected_stage: number;
+  enemies: EnemyRead[];
 }
