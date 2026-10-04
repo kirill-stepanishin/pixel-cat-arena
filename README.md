@@ -56,7 +56,9 @@ The PvE roster is infinite and scales linearly. The latest unlocked stage is
 the default opponent, while an arena selector allows replaying any defeated
 stage. Replays grant that stage's normal coins and loot table without
 advancing progression. Rewards are persisted atomically with the battle and
-duplicate item drops are valid.
+duplicate item drops are valid. Victories currently award guaranteed coins
+scaled by stage and roll for an item drop from the existing global item
+definitions; item-drop and rare-item chances increase in stage bands.
 
 This keeps combat fair, deterministic, and easy to extend to asynchronous PvP.
 
@@ -146,10 +148,11 @@ and current implementation status live in [`AGENTS.md`](AGENTS.md).
 
 The repository contains a tested backend and frontend through deterministic PvE:
 player/cat persistence, starter inventory, authoritative equipment actions,
-computed stat overlays, a persisted Dummy 1–3 opponent roster, deterministic
-battle seeds and snapshots, ordered battle events, and a direct Fight flow.
-The frontend calls `POST /dev/player` on startup and retains the returned
-player ID in browser storage. Rewards and progression beyond opponent
-advancement are not implemented yet; reward/economy decisions and the
-corresponding dashboard updates are the next planning step. The detailed
+computed stat overlays, an infinite linearly scaled opponent roster,
+deterministic battle seeds and snapshots, ordered battle events, atomic
+currency and item-drop rewards, battle/reward history, and a direct Fight flow
+with timed playback. The frontend calls `POST /dev/player` on startup and
+retains the returned player ID in browser storage. The current item-drop
+implementation uses the global item-definition pool; enemy-specific loot
+tables and milestone guarantees remain future content work. The detailed
 implementation state is tracked in [`AGENTS.md`](AGENTS.md).

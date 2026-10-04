@@ -35,6 +35,13 @@ history, and timed event playback with skip-to-result.
 The Fight action also resets its pending state after successful or failed
 requests so the control remains usable.
 
+Reward behavior is implemented server-side: every player victory grants
+stage-scaled coins, and a deterministic seeded roll may create a new item
+instance. Item-drop chance increases by stage bands, rare-item chance also
+increases by stage bands, and duplicate instances are allowed. The current
+drop pool is the global `item_definitions` collection; enemy-specific loot
+tables, milestone guarantees, and additional content are not implemented.
+
 Key decisions: SQLite is supported locally while Tiger Cloud remains optional;
 MVP identity is the unauthenticated `dev-player`; the frontend stays
 single-page; and the server remains authoritative for equipment, combat
@@ -187,7 +194,8 @@ speed-based deterministic resolution, persisted seeds and ordered battle
 events, per-player current-enemy persistence, and
 `POST /battles/pve` plus `GET /battles/{battle_id}`. The dashboard directly
 starts fights, displays authoritative results, advances the roster after wins,
-and keeps the Fight control usable after completion. No rewards are granted.
+and keeps the Fight control usable after completion. Reward creation was
+intentionally deferred to Phase 4 and is now implemented there.
 
 The player-facing progression slice is complete:
 
@@ -220,6 +228,13 @@ timed browser playback of persisted battle events with skip-to-result.
 The dashboard reveals rewards after playback, refreshes authoritative player
 state, and includes playback HP bars, result messaging, and failure-safe
 skip behavior. Cat XP and levels are intentionally out of scope.
+
+Current reward defaults are intentionally simple: coins equal
+`stage * 25`; item drops start at a 15% chance and increase by 5 percentage
+points per five stages, capped at 50%; rare-item chance starts at 10% and
+increases by 10 percentage points per five stages, capped at 60%. These rolls
+use the persisted battle seed so a completed battle has deterministic reward
+behavior.
 
 ### Phase 5 — Tiger Data marketplace
 
