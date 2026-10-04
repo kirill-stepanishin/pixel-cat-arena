@@ -6,10 +6,10 @@ next work.
 
 ## Current implementation state
 
-**Status:** The local two-player PvP demo and unified PvE/Async PvP arena UI
-are complete. The next goal is local demo verification and the remaining
-economy features: selling and marketplace trading. Hosting is explicitly out
-of scope for this milestone.
+**Status:** Phases 0-8 are complete: accounts, PvE, async PvP, instant selling,
+and the fixed-price marketplace all work locally. The next goal is Phase 9,
+the two-profile demo verification and targeted polish. Hosting is explicitly
+out of scope for this milestone.
 
 - [x] Product concept and MVP loop documented
 - [x] Backend and frontend scaffolds
@@ -21,20 +21,23 @@ of scope for this milestone.
 - [x] Layered cat equipment visuals
 - [x] Deterministic server-authoritative PvE
 - [x] Persistent battle events, rewards, and enemy progression
-- [x] Accounts and authenticated sessions (registration/login/session foundation)
+- [x] Accounts and authenticated sessions (cookie sessions enforced on all player routes)
 - [x] Instant item selling
 - [x] Fixed-price marketplace
-- [x] Asynchronous PvP (published builds, challenges, deterministic matches, and replay UI)
-- [ ] Local two-player smoke test
-- [ ] Visual polish and analytics
+- [x] Asynchronous PvP (published builds, challenges, deterministic matches, shared arena playback)
+- [ ] Local two-profile smoke test (separate profiles or incognito; tabs share a cookie)
+- [x] Inventory/equipment/market UI polish (tooltips, comparisons, filters, toasts)
+- [ ] Further visual polish and analytics
 - [ ] Solana NFT integration
 
 ### What works now
 
-The development player is provisioned as `dev-player`, with one cat named
-Mochi, base stats `12/10/8` for attack/defense/speed, 125 starter coins, and
-four starter items. The browser calls `POST /dev/player`, loads the inventory,
-and refreshes authoritative state after equipment actions.
+Players register with a username and password (`POST /players` also signs in)
+and authenticate with an HTTP-only `session_token` cookie; every player,
+item, battle, build, PvP, and marketplace route requires it. Each player
+starts with one cat named Mochi, base stats `12/10/8` for
+attack/defense/speed, 125 starter coins, and four starter items. `/dev/player`
+remains a hidden development helper.
 
 The backend persists item definitions and rolled item modifiers separately.
 Equipment is limited to one item per slot. Cat layers always render in this
@@ -50,10 +53,28 @@ fighter reaches zero HP, and every attack deals at least one damage after
 defense reduction. Victories grant stage-scaled coins and may grant a
 deterministically selected item drop. Duplicate item instances are valid.
 
-The frontend shows the cat, computed totals, equipment names, rarity, stat
-modifiers, inventory items, enemy selection, battle playback, rewards, loading
-states, errors, and pending actions. Equipment pictures are shown on the cat;
-the inventory and equipment sidebar use text, rarity color, and stat values.
+The arena is a single screen with PvE and Async PvP tabs. Both play back
+through the same battle animation with player stats on the left and opponent
+stats on the right; the challenged cat is mirrored. Async PvP uses published
+immutable build snapshots, a username challenge, and a server-resolved match;
+no replay history is kept. Battle results appear in a result card with coin,
+item, turn, and opponent plaques.
+
+Items come from a data-driven pool (2 archetypes per slot, each at four
+rarities) in `backend/app/content/items.py`. Each item has one primary stat
+rolled from a rarity range, and higher rarities add bonus stats (see the
+balance matrix in that file).
+
+The backpack supports slot filtering and sorting, hover tooltips with roll
+ranges, and stat comparison against the equipped item. Each card can equip,
+quick-sell, or list. Quick-sell pays `total stats x rarity multiplier`
+(common 1, rare 2, epic 3, legendary 5) and deletes the item in one
+transaction; equipped and listed items cannot be sold. The marketplace is
+fixed-price: a listing leaves the item in the seller's inventory but blocks
+equipping and selling it; a purchase locks the listing, item, and both
+currency rows, moves the coins and the item, and issues the buyer a new
+instance number. Self-purchases, double purchases, and insufficient funds are
+rejected, and buying needs a confirmation click.
 
 ## Technical stack
 
@@ -130,11 +151,11 @@ Complete. Stage-scaled coins, deterministic item drops, duplicate instances,
 battle-keyed reward persistence, enemy progression, defeated-enemy selection,
 battle/reward history, timed playback, and skip-to-result exist.
 
-### Phase 5 — Local accounts and sessions
+### Phase 5 — Local accounts and sessions (complete)
 
 1. [x] Add a password hash to players through a migration.
 2. [x] Add register, login, current-user, and logout/session behavior.
-3. Use authenticated identity for protected player, item, battle, and currency
+3. [x] Use authenticated identity for protected player, item, battle, and currency
    operations instead of trusting arbitrary player IDs from the browser.
 4. Keep scope small: no email verification, password reset, OAuth, or wallet
    login.
@@ -145,23 +166,23 @@ browser tabs or profiles while sharing the same local backend and SQLite file.
 
 ### Phase 6 — Instant selling
 
-1. Add a server-side sale endpoint.
-2. Calculate value from rarity and rolled stats.
-3. Prevent selling equipped or listed items.
-4. Credit currency and remove the item in one transaction.
-5. Add frontend confirmation, price display, and refreshed inventory/balance.
+1. [x] Add a server-side sale endpoint.
+2. [x] Calculate value from rarity and rolled stats.
+3. [x] Prevent selling equipped or listed items.
+4. [x] Credit currency and remove the item in one transaction.
+5. [x] Add frontend confirmation, price display, and refreshed inventory/balance.
 
 **Exit criteria:** A player can sell an eligible item exactly once and receive
 the server-calculated value.
 
 ### Phase 7 — Local fixed-price marketplace
 
-1. Add listing, seller, item, price, status, buyer, and timestamps.
-2. Add listing creation, active-listing browsing, cancellation, and purchase.
-3. Lock listing, item, and currency rows during purchase.
-4. Prevent self-purchases, double purchases, negative balances, and transfers
+1. [x] Add listing, seller, item, price, status, buyer, and timestamps.
+2. [x] Add listing creation, active-listing browsing, cancellation, and purchase.
+3. [x] Lock listing, item, and currency rows during purchase.
+4. [x] Prevent self-purchases, double purchases, negative balances, and transfers
    of equipped or already listed items.
-5. Add filtering by slot and rarity.
+5. [x] Add filtering by slot and rarity.
 
 **Exit criteria:** Two local accounts can list, browse, purchase, cancel, and
 reconcile item ownership and currency without duplication or double spending.
@@ -173,7 +194,7 @@ reconcile item ownership and currency without duplication or double spending.
 3. [x] Challenge another player by username or player ID.
 4. [x] Reuse deterministic combat against the saved opponent snapshot.
 5. [x] Persist both participant snapshots, seed, events, result, and timestamps.
-6. [x] Add challenge/result history.
+6. [x] Add challenge/result status (replay history UI intentionally removed).
 
 **Exit criteria:** One local account can challenge another account's saved
 build from a separate tab, resolve the match server-side, and later view the
@@ -219,40 +240,41 @@ and marketplace operations.
 
 ## API sequence
 
-Current endpoints:
+All routes except `/health` and `/auth/*` need the session cookie.
 
 ```text
 GET  /health
-POST /dev/player
+POST /players                      register and sign in
+POST /auth/register | /auth/login | /auth/logout
+GET  /auth/me
 GET  /players/{player_id}
 GET  /players/{player_id}/items
 GET  /players/items/definitions
 POST /players/{player_id}/cats/{cat_id}/items/{item_id}/equip
 POST /players/{player_id}/cats/{cat_id}/items/{item_id}/unequip
+POST /players/items/{item_id}/sell
 POST /battles/pve
 GET  /battles/{battle_id}
 GET  /battles/pve/current/{player_id}
 GET  /battles/pve/enemies/{player_id}
 GET  /battles/players/{player_id}/history
 GET  /battles/players/{player_id}/rewards
-```
-
-Next endpoints:
-
-```text
-POST /auth/register
-POST /auth/login
-GET  /auth/me
-POST /players/items/{item_id}/sell
+POST /builds/{player_id}/publish
+GET  /builds/{player_id}/published
+POST /pvp/challenges
+GET  /pvp/challenges/{challenge_id}
+POST /pvp/challenges/{challenge_id}/resolve
+GET  /pvp/challenges/{challenge_id}/match
+GET  /pvp/players/{player_id}/challenges
+GET  /pvp/players/{player_id}/matches
 POST /marketplace/listings
-GET  /marketplace/listings
+GET  /marketplace/listings?scope=others|mine&slot=&rarity=
 POST /marketplace/listings/{listing_id}/purchase
 POST /marketplace/listings/{listing_id}/cancel
-POST /pvp/builds/publish
-POST /pvp/challenges
-GET  /pvp/challenges
-GET  /pvp/challenges/{challenge_id}
 ```
+
+Remaining work is Phase 9 (demo verification and script) and the deferred
+Phase 10; no new endpoints are planned.
 
 ## Engineering rules
 

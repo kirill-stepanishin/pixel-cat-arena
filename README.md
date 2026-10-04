@@ -7,18 +7,19 @@ PvE loop.
 
 ## Current playable features
 
-- Development-player provisioning through `POST /dev/player`
-- Persistent player, cat, currency, item definition, and item instance data
-- Four equipment slots: body, accessory, head, and weapon
-- Server-validated equip and unequip actions
-- Layered cat visuals in this order: `base cat → body → accessory → head → weapon`
-- Computed attack, defense, and speed totals with equipment bonuses
-- Infinite linearly scaled Dummy enemies
-- Deterministic combat using persisted battle seeds and snapshots
-- Combat continues until one side wins; defense cannot reduce damage below 1
-- Persisted battle events, victory rewards, item drops, and enemy progression
-- Timed battle playback with skip-to-result
-- Inventory and equipment displays with rarity and stat modifiers
+- Accounts: register, log in, and log out with cookie sessions
+- Persistent players, cats, currency, item definitions, and item instances
+- Data-driven item pool: two items per slot, each in four rarities, with one
+  primary stat plus rarity-scaled bonus stats
+- Four equipment slots (body, accessory, head, weapon) with server-validated
+  equip/unequip and layered cat visuals
+- Deterministic PvE against infinitely scaling Dummy enemies, with rewards,
+  item drops, and animated playback
+- Asynchronous PvP: publish your build, challenge another player by username,
+  and watch the server-resolved match in the same arena
+- Instant selling for a server-calculated coin value
+- Fixed-price marketplace: list, browse, filter, buy, and cancel
+- Backpack sorting and filtering, hover tooltips, and stat comparisons
 
 The frontend is a single-page TypeScript/Vite application. The backend is a
 FastAPI application using SQLAlchemy, Alembic, and a configurable
@@ -26,19 +27,22 @@ SQLAlchemy-compatible database URL. SQLite is the current local development
 database. A hosted PostgreSQL-compatible database can be selected later
 without changing the domain model.
 
+## Playing with two accounts
+
+Browser tabs in one profile share a login cookie, so use a second browser
+profile or an incognito window for the second player, and use `localhost`
+consistently (not `127.0.0.1`).
+
 ## Planned next features
 
-1. Minimal accounts with username and securely hashed password or PIN
-2. Authenticated player sessions
-3. Instant item selling for server-calculated currency
-4. Fixed-price marketplace listings, purchases, and cancellation
-5. Asynchronous PvP against immutable published build snapshots
-6. Inventory sorting, filtering, and comparison improvements
-7. Deployment of the frontend and backend
+1. A repeatable two-profile demo script and reset procedure
+2. Further visual polish and analytics
+3. Hosting with a PostgreSQL-compatible database (marketplace concurrency
+   must be tested first)
+4. Wallet connection and Solana NFTs for legendary items
 
-Timed bidding auctions, live PvP, email-based account recovery, and Solana
-NFTs are deferred until the core account, marketplace, and saved-build PvP
-loop is stable.
+Timed bidding auctions, live PvP, and email-based account recovery are
+deferred.
 
 ## Technology
 
