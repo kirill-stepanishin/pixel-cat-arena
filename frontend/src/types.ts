@@ -77,7 +77,7 @@ export interface EnemyRead {
 export interface BattleRead {
   id: string;
   enemy_stage: number;
-  result: "player" | "enemy" | "draw";
+  result: "player" | "enemy";
   events: BattleEventRead[];
   player_snapshot: {
     name: string;
@@ -99,7 +99,7 @@ export interface BattleRead {
 export interface BattleEventRead {
   sequence: number;
   turn_number: number;
-  event_type: "attack" | "draw" | "victory" | "defeat";
+  event_type: "attack" | "victory" | "defeat";
   attacker: "player" | "enemy" | null;
   damage: number;
   player_hp: number;

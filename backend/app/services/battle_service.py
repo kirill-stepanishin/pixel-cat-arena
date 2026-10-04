@@ -16,7 +16,6 @@ from app.models.player import Currency, Player
 BASE_ENEMY = {"attack": 7, "defense": 8, "speed": 6}
 ENEMY_STAGE_GROWTH = {"attack": 4, "defense": 4, "speed": 1}
 COINS_PER_STAGE = 25
-MAX_TURNS = 100
 MAX_HP = 100
 
 
@@ -236,7 +235,9 @@ def resolve_battle(
     enemy_next_attack = Fraction(0)
     events: list[dict[str, object]] = []
 
-    for turn_number in range(1, MAX_TURNS + 1):
+    turn_number = 0
+    while player_hp > 0 and enemy_hp > 0:
+        turn_number += 1
         if player_next_attack < enemy_next_attack:
             attacker = "player"
             player_next_attack += Fraction(1, int(player["speed"]))
@@ -289,19 +290,8 @@ def resolve_battle(
             )
             return winner, events
 
-    events.append(
-        {
-            "sequence": MAX_TURNS + 1,
-            "turn_number": MAX_TURNS,
-            "event_type": "draw",
-            "attacker": None,
-            "damage": 0,
-            "player_hp": player_hp,
-            "enemy_hp": enemy_hp,
-            "elapsed_time": float(min(player_next_attack, enemy_next_attack)),
-        }
-    )
-    return "draw", events
+    winner = "player" if enemy_hp == 0 else "enemy"
+    return winner, events
 
 
 async def get_battle(session: AsyncSession, battle_id: str) -> Battle | None:

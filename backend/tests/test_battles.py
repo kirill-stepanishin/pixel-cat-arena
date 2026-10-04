@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app import db
 from app.main import app
 from app.models import Base
-from app.services.battle_service import MAX_TURNS, resolve_battle
+from app.services.battle_service import resolve_battle
 
 
 def _build_session_factory() -> async_sessionmaker:
@@ -43,7 +43,7 @@ def test_battle_resolution_is_deterministic_and_uses_fixed_hp() -> None:
     assert first_result == second_result
     assert first_result[1][0]["player_hp"] == 100
     assert first_result[1][0]["enemy_hp"] < 100
-    assert first_result[0] in {"player", "enemy", "draw"}
+    assert first_result[0] in {"player", "enemy"}
 
 
 def test_faster_attacker_gets_more_attacks_over_time() -> None:
@@ -63,15 +63,17 @@ def test_faster_attacker_gets_more_attacks_over_time() -> None:
     assert player_attacks > enemy_attacks
 
 
-def test_turn_limit_is_a_draw() -> None:
+def test_defense_cannot_reduce_damage_below_one() -> None:
     player = _combatant(1, 1000, 10)
     enemy = _combatant(1, 1000, 10)
 
     result, events = resolve_battle(player, enemy, seed=1)
 
-    assert result == "draw"
-    assert len([event for event in events if event["event_type"] == "attack"]) == MAX_TURNS
-    assert events[-1]["event_type"] == "draw"
+    assert result in {"player", "enemy"}
+    attack_events = [event for event in events if event["event_type"] == "attack"]
+    assert attack_events
+    assert all(event["damage"] >= 1 for event in attack_events)
+    assert events[-1]["event_type"] in {"victory", "defeat"}
 
 
 def test_pve_endpoint_persists_battle_and_events(monkeypatch) -> None:

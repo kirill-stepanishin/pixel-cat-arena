@@ -283,30 +283,20 @@ h1 {
   white-space: nowrap;
 }
 
-.equipment-visual,
-.mini-visual {
-  display: grid;
-  place-items: center;
-  border-radius: 12px;
-  background: #fff3a6;
-  color: #e66d68;
-  border: 2px solid #f0c65d;
-}
-
-.sprite-image {
-  width: 42px;
-  height: 42px;
-  object-fit: contain;
-  image-rendering: pixelated;
-}
-
-.equipment-visual {
-  min-height: 48px;
-  font-size: 1.7rem;
-}
-
 .equipment-slot strong {
   font-size: 0.85rem;
+}
+
+.item-rarity {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.equipment-modifiers {
+  color: #9c694b;
+  font-size: 0.7rem;
+  font-weight: 700;
 }
 
 .rarity-common {
@@ -384,12 +374,6 @@ h1 {
   background: #e6fff6;
 }
 
-.inventory-card-top {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-}
-
 .inventory-card-top strong {
   display: block;
   margin-bottom: 0.15rem;
@@ -400,13 +384,6 @@ h1 {
   color: #5c8290;
   font-size: 0.68rem;
   text-transform: capitalize;
-}
-
-.mini-visual {
-  width: 34px;
-  height: 34px;
-  flex: 0 0 34px;
-  font-size: 1rem;
 }
 
 .inventory-card-meta {

@@ -1,70 +1,83 @@
 # Pixel Cat Arena Engineering Plan
 
-This file is the working guide for implementing Pixel Cat Arena. Keep it
-updated as each milestone is completed. `README.md` is the product-facing
-description; this file contains implementation detail and agent guidance.
+This file is the implementation guide for Pixel Cat Arena. `README.md` is the
+product-facing overview; this file records the current state, boundaries, and
+next work.
 
 ## Current implementation state
 
-**Status:** Phases 0–4 are complete. The next active slice is marketplace
-design and implementation.
+**Status:** The local single-player PvE foundation is complete. The next goal
+is a local two-player demo using two browser sessions and one backend process.
+Accounts, instant selling, marketplace trading, and asynchronous PvP are not
+implemented yet. Hosting is explicitly out of scope for this milestone.
 
 - [x] Product concept and MVP loop documented
-- [x] Sequential implementation phases defined
-- [x] Tiger Data selected as the production database foundation
-- [x] Solana explicitly deferred until the local game is stable
-- [x] Backend scaffold
-- [x] Frontend scaffold
-- [x] Tiger Data connection and health check
-- [x] Player and cat persistence
-- [x] Inventory and equipment
-- [x] Deterministic PvE
-- [x] Rewards and progression
-- [ ] Marketplace
+- [x] Backend and frontend scaffolds
+- [x] Configurable database connection and health check
+- [x] Player, cat, and currency persistence
+- [x] Item definitions and item instances
+- [x] Equipment ownership validation and four equipment slots
+- [x] Single-page inventory/equipment dashboard
+- [x] Layered cat equipment visuals
+- [x] Deterministic server-authoritative PvE
+- [x] Persistent battle events, rewards, and enemy progression
+- [ ] Accounts and authenticated sessions
+- [ ] Instant item selling
+- [ ] Fixed-price marketplace
 - [ ] Asynchronous PvP
-- [ ] Hackathon polish and analytics
-- [ ] Solana wallet and asset integration
+- [ ] Local two-player smoke test
+- [ ] Visual polish and analytics
+- [ ] Solana NFT integration
 
-Completed implementation summary: the independent backend and frontend shells,
-SQLite-compatible local development path, development-player provisioning,
-player/cat persistence, starter inventory, authoritative equipment actions,
-computed stat overlays, persisted deterministic battle seeds/snapshots/events,
-infinite linearly scaled Dummy progression, selectable defeated enemies,
-atomic stage-scaled rewards with duplicate item drops, player battle/reward
-history, and timed event playback with skip-to-result.
-The Fight action also resets its pending state after successful or failed
-requests so the control remains usable.
+### What works now
 
-Reward behavior is implemented server-side: every player victory grants
-stage-scaled coins, and a deterministic seeded roll may create a new item
-instance. Item-drop chance increases by stage bands, rare-item chance also
-increases by stage bands, and duplicate instances are allowed. The current
-drop pool is the global `item_definitions` collection; enemy-specific loot
-tables, milestone guarantees, and additional content are not implemented.
+The development player is provisioned as `dev-player`, with one cat named
+Mochi, base stats `12/10/8` for attack/defense/speed, 125 starter coins, and
+four starter items. The browser calls `POST /dev/player`, loads the inventory,
+and refreshes authoritative state after equipment actions.
 
-Key decisions: SQLite is supported locally while Tiger Cloud remains optional;
-MVP identity is the unauthenticated `dev-player`; the frontend stays
-single-page; and the server remains authoritative for equipment, combat
-results, rewards, and progression.
+The backend persists item definitions and rolled item modifiers separately.
+Equipment is limited to one item per slot. Cat layers always render in this
+order, regardless of API or equip order:
 
-Current gameplay defaults are intentionally small: a development player named
-`dev-player`, one cat named Mochi with base stats `12/10/8` for
-attack/defense/speed, `125` starter coins, and four starter items covering the
-four equipment slots. Authentication, marketplace behavior, and asynchronous
-PvP remain future work.
+```text
+base cat → body → accessory → head → weapon
+```
 
-Before adding content, preserve these extension boundaries:
+PvE uses snapshots and a persisted seed. Turns are speed-based and deterministic
+for a given snapshot and seed. Combat has no draw result: it runs until a
+fighter reaches zero HP, and every attack deals at least one damage after
+defense reduction. Victories grant stage-scaled coins and may grant a
+deterministically selected item drop. Duplicate item instances are valid.
 
-- Keep stats in one validated stat/modifier model; do not scatter fixed stat
-  fields through routes, combat, and UI.
-- Keep cats, enemies, and items data-driven; isolate exceptional behavior in
-  abilities or strategies rather than type checks throughout the codebase.
-- Equipment composition is player-only for the MVP. Enemy sprites are standalone
-  visuals and do not receive item overlays.
-- Keep route handlers and UI screens thin; put rules in backend services and
-  presentation state in frontend modules.
+The frontend shows the cat, computed totals, equipment names, rarity, stat
+modifiers, inventory items, enemy selection, battle playback, rewards, loading
+states, errors, and pending actions. Equipment pictures are shown on the cat;
+the inventory and equipment sidebar use text, rarity color, and stat values.
 
-### Scaffold commands
+## Technical stack
+
+- Python 3.12
+- FastAPI and Pydantic
+- TypeScript and Vite
+- SQLAlchemy 2 and Alembic
+- SQLite for local development
+- PostgreSQL-compatible SQLAlchemy support can be added later if public hosting
+  becomes necessary
+- Pytest and Vitest
+
+The database is selected through `DATABASE_URL`. Do not assume a provider in
+application code or documentation. The local default is SQLite:
+
+```text
+DATABASE_URL=sqlite+aiosqlite:///./pixel_cat_arena.db
+```
+
+The backend intentionally reports `503` from `/health` when the database is
+missing or unavailable. This makes configuration failures explicit rather than
+presenting a false healthy state.
+
+## Scaffold commands
 
 ```text
 cp .env.example .env
@@ -74,261 +87,143 @@ make frontend
 make test
 ```
 
-The backend intentionally reports `503` from `/health` until
-`DATABASE_URL` is configured and Tiger Data can answer `SELECT 1`. This makes
-missing infrastructure explicit instead of presenting a false healthy state.
+## Product and engineering boundaries
 
-## Technical stack
-
-### Runtime and application layers
-
-- Python 3.12
-- FastAPI and Pydantic
-- TypeScript and Vite
-- HTML/CSS and Canvas 2D
-- SQLAlchemy 2
-- Alembic
-- PostgreSQL-compatible SQL
-
-### Infrastructure
-
-- Tiger Data / Tiger Cloud PostgreSQL
-- `DATABASE_URL` supplied through environment configuration
-- Docker support after the local development loop is working
-
-### Testing
-
-- Pytest for API, persistence, combat, rewards, and transaction behavior
-- Vitest for sprite composition, client state, and display helpers
-- API smoke checks for the health endpoint and the main player flow
-
-### Later blockchain layer
-
-- Solana wallet connection in the frontend
-- Backend nonce/signature verification
-- A local ownership implementation first
-- A Solana ownership implementation for selected rare items later
-
-Do not make Solana a runtime requirement for the MVP. Keep gameplay state,
-normal currency, battles, rewards, and ordinary marketplace operations in Tiger
-Data unless a later product decision explicitly moves them on-chain.
-
-## Repository layout
-
-Create this structure during Phase 0:
-
-```text
-backend/
-  app/
-    main.py
-    config.py
-    db.py
-    models/
-    schemas/
-    api/
-    services/
-  migrations/
-  tests/
-frontend/
-  src/
-    api/
-    state/
-    screens/
-    rendering/
-    styles/
-  public/assets/
-  tests/
-scripts/
-docker-compose.yml
-Makefile
-```
-
-Keep domain rules in backend services rather than route handlers. Keep the
-frontend responsible for presentation, input, and animation, never for
-authoritative rewards or combat outcomes.
+- Keep stats in one validated stat/modifier model.
+- Keep cats, enemies, and items data-driven.
+- Keep route handlers and UI screens thin; put rules in backend services.
+- Keep combat, ownership, rewards, sale prices, and marketplace transfers
+  server-authoritative.
+- Keep equipment composition player-only; enemy sprites are standalone.
+- Do not add Solana as a runtime requirement.
+- Do not build live networking; asynchronous saved-build PvP is sufficient.
+- Do not add timed bidding before fixed-price trading is reliable.
 
 ## Sequential implementation plan
 
 ### Phase 0 — Foundation
 
-Completed: backend/frontend manifests, environment loading, SQLAlchemy, Alembic,
-the health endpoint, Vite shell, and local commands.
-
-**Exit criteria:** Both services start and `/health` reports database status.
+Complete. Backend/frontend manifests, environment loading, database access,
+Alembic migrations, health endpoint, Vite shell, and local commands exist.
 
 ### Phase 1 — Player and cat
 
-Completed: player/cat/currency persistence, starter data, schemas, services,
-routes, and the validated stat model. The development player is `dev-player`
-with Mochi, base stats `12/10/8`, and 125 coins.
-
-**Exit criteria:** A development player persists with the same cat and balance.
+Complete. Player, cat, currency, starter data, schemas, services, routes, and
+the validated stat model exist. Identity is still the temporary development
+player and is not authentication.
 
 ### Phase 2 — Items and equipment
 
-Completed: item definitions/instances, four slots, structured stat modifiers,
-starter gear, ownership validation, one equipped item per slot, and the
-single-page dashboard with inventory, equipment, stat overlays, placeholder
-visuals, and loading/error/pending states.
-
-The first content pass is now also prepared: two item archetypes per slot, with
-each archetype available in common, rare, epic, and legendary variants. The
-catalog has a rarity balance matrix, deterministic primary/bonus stat rolls,
-and persisted instance modifiers. Common starter rolls remain small and fixed
-for the documented opening build; reward drops unlock higher rarity bands at
-stages 5, 10, and 20.
-
-### Frontend product assumptions
-
-- The MVP uses one page rather than separate inventory, marketplace, profile,
-  and arena routes.
-- The development player starts as `dev-player` with Mochi, 125 coins, and the
-  four seeded starter items; this is temporary identity/data, not an auth
-  design.
-- The page presents the player's cat as the primary focus, with inventory,
-  equipment, marketplace access, and the current enemy/NPC in the same view.
-- The first enemy area is the current PvE opponent. It becomes interactive
-  through the direct Fight action; no replay system is needed.
-- The frontend automatically provisions the unauthenticated development player
-  through `POST /dev/player` and stores the returned ID in browser storage.
-- Placeholder visuals are intentional for now; no art asset pipeline is
-  required before the next phase.
-- Stat displays show both totals and equipment contributions.
-- Server responses, not local guesses, define ownership and equipment state.
+Complete. Item definitions/instances, four slots, starter gear, rolled
+modifiers, ownership checks, equipment actions, stat overlays, layered
+placeholder visuals, and the single-page dashboard exist.
 
 ### Phase 3 — Deterministic PvE
 
-Completed: a data-driven Dummy 1–3 roster, fixed-HP combat snapshots,
-speed-based deterministic resolution, persisted seeds and ordered battle
-events, per-player current-enemy persistence, and
-`POST /battles/pve` plus `GET /battles/{battle_id}`. The dashboard directly
-starts fights, displays authoritative results, advances the roster after wins,
-and keeps the Fight control usable after completion. Reward creation was
-intentionally deferred to Phase 4 and is now implemented there.
-
-The player-facing progression slice is complete:
-
-1. Seed three ordered enemies: `Dummy 1`, `Dummy 2`, and `Dummy 3`, with
-   increasing stats and stable IDs that can be renamed later.
-2. Persist each player's current PvE enemy, starting at `Dummy 1`.
-3. Make the PvE endpoint fight the player's current enemy without accepting an
-   arbitrary enemy ID from the client.
-4. Advance to the next dummy only after a player win; retain the same dummy
-   after a loss or draw. Keep `Dummy 3` current after it is defeated.
-5. Add the dashboard Fight action. Show the server's completed result and
-   current enemy state directly; do not add battle replay.
-6. Keep rewards deferred. Wins advance progression only; losses and draws grant
-   neither rewards nor progression.
-7. Test roster seeding, per-player persistence, win advancement, loss/draw
-   retention, maximum progression, and authoritative result handling.
-
-**Exit criteria:** Refreshing preserves each player's current dummy, a win
-advances exactly one level, a loss/draw leaves the enemy unchanged, and the
-browser never computes the battle result or progression. Complete.
+Complete. Infinite linearly scaled Dummy enemies, current-enemy persistence,
+combat snapshots, seeds, ordered events, speed-based turns, minimum damage of
+one, victory/defeat outcomes, and the Fight flow exist.
 
 ### Phase 4 — Rewards and progression
 
-Completed: infinite enemy stages with fixed linear stat scaling, highest-stage
-unlock progression, defeated-enemy selection, linearly scaling coin rewards,
-stage-band item drops, duplicate item instances, atomic battle/reward
-transactions with battle-keyed idempotency, player battle/reward history, and
-timed browser playback of persisted battle events with skip-to-result.
+Complete. Stage-scaled coins, deterministic item drops, duplicate instances,
+battle-keyed reward persistence, enemy progression, defeated-enemy selection,
+battle/reward history, timed playback, and skip-to-result exist.
 
-The dashboard reveals rewards after playback, refreshes authoritative player
-state, and includes playback HP bars, result messaging, and failure-safe
-skip behavior. Cat XP and levels are intentionally out of scope.
+### Phase 5 — Local accounts and sessions
 
-Current reward defaults are intentionally simple: coins equal
-`stage * 25`; item drops start at a 15% chance and increase by 5 percentage
-points per five stages, capped at 50%; rare-item chance starts at 10% and
-increases by 10 percentage points per five stages, capped at 60%. These rolls
-use the persisted battle seed so a completed battle has deterministic reward
-behavior.
+1. Add a password hash to players through a migration.
+2. Add register, login, current-user, and logout/session behavior.
+3. Use authenticated identity for protected player, item, battle, and currency
+   operations instead of trusting arbitrary player IDs from the browser.
+4. Keep scope small: no email verification, password reset, OAuth, or wallet
+   login.
 
-### Phase 5 — Tiger Data marketplace
+**Exit criteria:** Two players can register, log in, log out, and reload their
+own independent cats, inventories, currency, and PvE progress from separate
+browser tabs or profiles while sharing the same local backend and SQLite file.
 
-1. Add marketplace listings with seller, item, price, and status.
-2. Add listing creation and cancellation.
-3. Prevent selling equipped items.
-4. Implement atomic purchase transactions with row locking or equivalent
-   PostgreSQL safeguards.
-5. Prevent expired, cancelled, already purchased, and self-invalidating
-   purchases.
-6. Add browsing and filtering by slot and rarity.
-7. Add indexes based on actual active-listing queries.
+### Phase 6 — Instant selling
 
-**Exit criteria:** Two players can trade safely without duplicated items,
-negative balances, or double purchases.
+1. Add a server-side sale endpoint.
+2. Calculate value from rarity and rolled stats.
+3. Prevent selling equipped or listed items.
+4. Credit currency and remove the item in one transaction.
+5. Add frontend confirmation, price display, and refreshed inventory/balance.
 
-### Phase 6 — Asynchronous PvP
+**Exit criteria:** A player can sell an eligible item exactly once and receive
+the server-calculated value.
 
-1. Add published build snapshots.
-2. Let players publish their current equipment for challenges.
-3. Reuse the PvE combat service for saved-build matches.
-4. Store both participant snapshots and the result.
-5. Add history and a small wins/rating leaderboard.
+### Phase 7 — Local fixed-price marketplace
 
-**Exit criteria:** An offline player can be challenged and can later view the
-result.
+1. Add listing, seller, item, price, status, buyer, and timestamps.
+2. Add listing creation, active-listing browsing, cancellation, and purchase.
+3. Lock listing, item, and currency rows during purchase.
+4. Prevent self-purchases, double purchases, negative balances, and transfers
+   of equipped or already listed items.
+5. Add filtering by slot and rarity.
 
-### Phase 7 — Demo polish and Tiger Data analytics
+**Exit criteria:** Two local accounts can list, browse, purchase, cancel, and
+reconcile item ownership and currency without duplication or double spending.
 
-1. Improve loading, empty, error, and pending-transaction states.
-2. Add onboarding and a battle tutorial.
-3. Add battle and marketplace metrics with PostgreSQL queries.
-4. Add timestamped event data where time-series analysis is useful.
-5. Add seed data and a repeatable demo script.
-6. Add Docker and deployment documentation.
+### Phase 8 — Local asynchronous PvP
 
-**Exit criteria:** A judge can complete the whole loop without assistance:
-create player → equip cat → fight PvE → earn reward → trade gear → challenge a
-saved build.
+1. Add immutable published build snapshots.
+2. Publish the current cat, equipment, and computed stats.
+3. Challenge another player by username or player ID.
+4. Reuse deterministic combat against the saved opponent snapshot.
+5. Persist both participant snapshots, seed, events, result, and timestamps.
+6. Add challenge/result history.
 
-### Phase 8 — Solana integration
+**Exit criteria:** One local account can challenge another account's saved
+build from a separate tab, resolve the match server-side, and later view the
+authoritative result without mutating the opponent's current inventory.
 
-1. Add frontend wallet connection.
-2. Issue backend nonces and verify signed wallet messages.
-3. Associate verified wallet addresses with players.
-4. Add an ownership interface with local and Solana implementations.
-5. Mint selected rare gear as Solana assets.
-6. Show mint and transaction links on item details.
-7. Add on-chain settlement for selected marketplace items only if stable and
-   time permits.
+### Phase 9 — Local demo verification and targeted polish
 
-**Exit criteria:** Solana features are additive, optional, and do not break
-database-backed gameplay for players without a wallet.
+1. Run one backend process, one frontend dev server, and the local SQLite
+   database.
+2. Open two tabs or browser profiles and register separate accounts.
+3. Test PvE, item sale, listing, purchase, cancellation, and asynchronous PvP
+   from both accounts.
+4. Add only high-value polish: readable loading/error/pending states, clear
+   account identity, inventory sorting/filtering, and battle feedback.
+5. Keep a repeatable local demo script and reset procedure.
+
+### Phase 10 — Future hosting and Solana
+
+Deferred. Public hosting, PostgreSQL migration, wallet connection, verified
+wallet association, and legendary NFT ownership are future work. None is
+required for the local demo. If hosting is later requested, first migrate the
+database and test marketplace concurrency before exposing the app publicly.
 
 ## Data model
 
-Use definitions and instances separately. A definition describes an item type;
-an instance is one owned, tradeable item.
-
 | Table | Purpose |
 |---|---|
-| `players` | Development identity, display name, optional verified wallet |
-| `cats` | Player cat, base sprite, level, experience |
-| `currencies` | Current player balance and accounting metadata |
-| `item_definitions` | Name, slot, rarity, sprite, base stats |
-| `item_instances` | Owner, definition, rolled stats, state |
-| `equipment` | Cat, slot, equipped item |
-| `enemies` | Enemy stats, sprite, and difficulty |
-| `battles` | Participants, seed, snapshots, result, status, timestamps |
-| `battle_events` | Ordered events used to replay a battle |
-| `rewards` | Battle, player, currency/item reward, claim state |
-| `marketplace_listings` | Seller, item, price, status, timestamps |
-| `build_snapshots` | Published equipment and stats for async PvP |
+| `players` | Account identity, display name, and future password hash |
+| `cats` | Player cat and base stats |
+| `currencies` | Player balance |
+| `item_definitions` | Static item type, slot, rarity, visual, and roll rules |
+| `item_instances` | Owned item, rolled modifiers, and equipment state |
+| `enemies` | PvE enemy definitions |
+| `battles` | Participants, seed, snapshots, result, and timestamps |
+| `battle_events` | Ordered persisted combat events |
+| `rewards` | Battle rewards and item drops |
+| `marketplace_listings` | Fixed-price item listings and transfer state |
+| `build_snapshots` | Immutable saved builds for asynchronous PvP |
 
 Use foreign keys, unique constraints for equipment slots, non-negative
-currency constraints where practical, and transactions for rewards and
-marketplace operations. Add indexes from observed API queries.
+currency constraints where practical, and transactions for rewards, sales,
+and marketplace operations.
 
 ## API sequence
 
-Implement API slices in phase order:
+Current endpoints:
 
 ```text
 GET  /health
-POST /players
+POST /dev/player
 GET  /players/{player_id}
 GET  /players/{player_id}/items
 GET  /players/items/definitions
@@ -336,24 +231,35 @@ POST /players/{player_id}/cats/{cat_id}/items/{item_id}/equip
 POST /players/{player_id}/cats/{cat_id}/items/{item_id}/unequip
 POST /battles/pve
 GET  /battles/{battle_id}
-POST /marketplace/listings
-GET  /marketplace/listings
-POST /marketplace/listings/{listing_id}/purchase
-POST /builds/{player_id}/publish
-POST /pvp/challenges
+GET  /battles/pve/current/{player_id}
+GET  /battles/pve/enemies/{player_id}
+GET  /battles/players/{player_id}/history
+GET  /battles/players/{player_id}/rewards
 ```
 
-Reserve wallet, nonce, minting, and blockchain transaction endpoints for
-Phase 8.
+Next endpoints:
+
+```text
+POST /auth/register
+POST /auth/login
+GET  /auth/me
+POST /players/items/{item_id}/sell
+POST /marketplace/listings
+GET  /marketplace/listings
+POST /marketplace/listings/{listing_id}/buy
+POST /marketplace/listings/{listing_id}/cancel
+POST /pvp/builds/publish
+POST /pvp/challenges
+GET  /pvp/challenges
+GET  /pvp/challenges/{challenge_id}
+```
 
 ## Engineering rules
 
 - Build and verify one phase before starting the next.
-- Keep combat server-authoritative and deterministic.
-- Use explicit validation and clear API errors; do not silently fall back.
-- Keep route handlers thin and put domain behavior in services.
-- Keep the first art set small and use shared sprite dimensions.
-- Prefer standard PostgreSQL SQL so Tiger Data remains easy to inspect.
-- Do not add real-time networking; saved-build PvP is sufficient.
-- Update this file's current-state checklist whenever a phase meaningfully
-  changes.
+- Prefer precise validation and explicit API errors.
+- Never silently fall back on invalid ownership, balance, or battle state.
+- Keep the client from choosing winners, rewards, prices, or transfer results.
+- Keep SQLAlchemy and Alembic boundaries clean so a future PostgreSQL migration
+  does not require a domain rewrite.
+- Update this file's checklist whenever a phase meaningfully changes.

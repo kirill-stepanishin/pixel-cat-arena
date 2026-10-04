@@ -6,7 +6,7 @@ import {
   getInventory,
   unequipItem,
 } from "../api/gameApi";
-import { renderCat, renderGlyph } from "../rendering/placeholders";
+import { renderCat } from "../rendering/placeholders";
 import { getEquippedItemsForCat, SLOT_ORDER, sumBonusForStat } from "../state/playerState";
 import type {
   BattleRead,
@@ -393,7 +393,7 @@ function createBattlePlayback(root: HTMLElement, battle: BattleRead): {
       if (playout) {
         playout.textContent = event.event_type === "attack"
           ? `${event.attacker === "player" ? "Mochi" : battle.enemy_snapshot.name} attacks for ${event.damage}!`
-          : event.event_type === "draw" ? "Time! It’s a draw." : event.event_type === "victory" ? "Victory blow!" : "Defeat blow!";
+          : event.event_type === "victory" ? "Victory blow!" : "Defeat blow!";
       }
       timer = window.setTimeout(playNext, 180);
     };
@@ -454,12 +454,26 @@ function renderEquipmentSlots(
         <div class="equipment-headline">
           <span>${labelText}</span>
         </div>
-        <div class="equipment-visual">${item ? renderGlyph(item.definition.visual_key, item.definition.slot) : "□"}</div>
         <strong class="${item ? rarityClass(item.definition.rarity) : ""}">${itemName}</strong>
+        ${item ? `<span class="item-rarity ${rarityClass(item.definition.rarity)}">${item.definition.rarity}</span>` : ""}
+        ${item ? `<div class="equipment-modifiers">${formatItemModifiers(item)}</div>` : ""}
         ${buttonMarkup}
       </div>
     `;
   }).join("");
+}
+
+function formatItemModifiers(item: ItemInstanceRead): string {
+  const modifiers: Array<[string, number]> = [
+    ["ATK", item.modifiers.attack],
+    ["DEF", item.modifiers.defense],
+    ["SPD", item.modifiers.speed],
+  ];
+
+  return modifiers
+    .filter(([, value]) => value !== 0)
+    .map(([label, value]) => `${label} ${value > 0 ? "+" : ""}${value}`)
+    .join(" · ") || "No stat bonus";
 }
 
 function renderInventoryList(
@@ -496,12 +510,12 @@ function renderInventoryList(
     return `
       <article class="inventory-card ${rarityClass(item.definition.rarity)}">
         <div class="inventory-card-top">
-          <div class="mini-visual">${renderGlyph(item.definition.visual_key, item.definition.slot)}</div>
           <div>
             <strong class="${rarityClass(item.definition.rarity)}">${item.definition.name}</strong>
             <span>${item.definition.slot}</span>
           </div>
         </div>
+        <span class="item-rarity ${rarityClass(item.definition.rarity)}">${item.definition.rarity}</span>
         <div class="inventory-card-meta">
           <small>ATK ${item.modifiers.attack || 0}</small>
           <small>DEF ${item.modifiers.defense || 0}</small>
@@ -532,13 +546,12 @@ function showError(root: HTMLElement, message: string): void {
   }
 }
 
-function showBattleResult(root: HTMLElement, result: "player" | "enemy" | "draw"): void {
+function showBattleResult(root: HTMLElement, result: "player" | "enemy"): void {
   const resultElement = root.querySelector<HTMLElement>("#battle-result");
   if (!resultElement) return;
   resultElement.textContent =
     result === "player" ? "Victory! The next dummy is ready." :
-    result === "enemy" ? "Defeat. Try again against the same dummy." :
-    "Draw. The current dummy remains.";
+    "Defeat. Try again against the same dummy.";
   resultElement.dataset.result = result;
 }
 

@@ -37,7 +37,7 @@ class CombatantSnapshot(BaseModel):
 class BattleEventRead(BaseModel):
     sequence: int
     turn_number: int
-    event_type: Literal["attack", "draw", "victory", "defeat"]
+    event_type: Literal["attack", "victory", "defeat"]
     attacker: Literal["player", "enemy"] | None
     damage: int
     player_hp: int
@@ -54,7 +54,7 @@ class BattleRead(BaseModel):
     enemy_stage: int
     seed: int
     status: Literal["completed"]
-    result: Literal["player", "enemy", "draw"]
+    result: Literal["player", "enemy"]
     player_snapshot: CombatantSnapshot
     enemy_snapshot: CombatantSnapshot
     turn_count: int
