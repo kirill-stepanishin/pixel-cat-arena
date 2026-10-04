@@ -24,7 +24,7 @@ implemented yet. Hosting is explicitly out of scope for this milestone.
 - [ ] Accounts and authenticated sessions
 - [ ] Instant item selling
 - [ ] Fixed-price marketplace
-- [ ] Asynchronous PvP
+- [ ] Asynchronous PvP (published build snapshots implemented)
 - [ ] Local two-player smoke test
 - [ ] Visual polish and analytics
 - [ ] Solana NFT integration
@@ -168,12 +168,12 @@ reconcile item ownership and currency without duplication or double spending.
 
 ### Phase 8 — Local asynchronous PvP
 
-1. Add immutable published build snapshots.
-2. Publish the current cat, equipment, and computed stats.
-3. Challenge another player by username or player ID.
-4. Reuse deterministic combat against the saved opponent snapshot.
-5. Persist both participant snapshots, seed, events, result, and timestamps.
-6. Add challenge/result history.
+1. [x] Add immutable published build snapshots.
+2. [x] Publish the current cat, equipment, and computed stats.
+3. [x] Challenge another player by username or player ID.
+4. [x] Reuse deterministic combat against the saved opponent snapshot.
+5. [x] Persist both participant snapshots, seed, events, result, and timestamps.
+6. [x] Add challenge/result history.
 
 **Exit criteria:** One local account can challenge another account's saved
 build from a separate tab, resolve the match server-side, and later view the

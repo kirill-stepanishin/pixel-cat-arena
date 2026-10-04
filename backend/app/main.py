@@ -6,6 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.battles import router as battles_router
+from app.api.builds import router as builds_router
+from app.api.challenges import router as challenges_router
 from app.api.items import router as items_router
 from app.api.players import router as players_router
 from app.config import get_settings
@@ -32,6 +34,8 @@ app.add_middleware(
 app.include_router(players_router)
 app.include_router(items_router)
 app.include_router(battles_router)
+app.include_router(builds_router)
+app.include_router(challenges_router)
 
 
 @app.get("/health")
