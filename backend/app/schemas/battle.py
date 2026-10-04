@@ -51,6 +51,7 @@ class BattleRead(BaseModel):
     id: str
     player_id: str
     enemy_id: str
+    enemy_stage: int
     seed: int
     status: Literal["completed"]
     result: Literal["player", "enemy", "draw"]

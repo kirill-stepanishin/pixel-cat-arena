@@ -125,6 +125,49 @@ def test_current_enemy_is_persisted_and_advances_after_a_win(monkeypatch) -> Non
     assert client.get(f"/battles/pve/current/{player['id']}").json()["id"] == "dummy-2"
 
 
+def test_scaled_enemy_selection_and_repeatable_stage_rewards(monkeypatch) -> None:
+    monkeypatch.setattr(db, "session_factory", _build_session_factory())
+    client = TestClient(app)
+    player = client.post("/dev/player").json()
+    battle_service = __import__("app.services.battle_service", fromlist=["create_pve_battle"])
+    original_resolver = battle_service.resolve_battle
+    monkeypatch.setattr(
+        battle_service,
+        "resolve_battle",
+        lambda player, enemy, seed: ("player", [{
+            "sequence": 1,
+            "turn_number": 1,
+            "event_type": "victory",
+            "attacker": "player",
+            "damage": 0,
+            "player_hp": 100,
+            "enemy_hp": 0,
+            "elapsed_time": 0,
+        }]),
+    )
+    try:
+        first = client.post("/battles/pve", json={"player_id": player["id"]}).json()
+        replay = client.post(
+            "/battles/pve",
+            json={"player_id": player["id"], "enemy_stage": 1},
+        ).json()
+    finally:
+        monkeypatch.setattr(battle_service, "resolve_battle", original_resolver)
+
+    assert first["reward"]["currency_amount"] == 25
+    assert replay["reward"]["currency_amount"] == 25
+    assert replay["enemy_stage"] == 1
+    progress = client.get(f"/battles/pve/enemies/{player['id']}").json()
+    assert progress["highest_unlocked_stage"] == 2
+    assert [enemy["stage"] for enemy in progress["enemies"]] == [1, 2]
+    assert progress["enemies"][1]["attack"] == 11
+
+    updated_player = client.get(f"/players/{player['id']}").json()
+    assert updated_player["currencies"][0]["balance"] == 175
+    assert len(client.get(f"/battles/players/{player['id']}/history").json()) == 2
+    assert len(client.get(f"/battles/players/{player['id']}/rewards").json()) == 2
+
+
 def test_pve_rejects_unknown_player(monkeypatch) -> None:
     monkeypatch.setattr(db, "session_factory", _build_session_factory())
     response = TestClient(app).post(
