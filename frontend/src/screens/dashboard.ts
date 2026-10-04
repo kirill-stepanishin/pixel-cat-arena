@@ -730,11 +730,11 @@ function renderInventoryList(
          <button type="button" class="ghost-button" data-cancel-listing="${listing.id}">Cancel listing</button>`
       : `<div class="card-actions" data-when="idle">
            <button type="button" class="primary-button" data-action="equip" data-item-id="${item.id}" data-player-id="${playerId}" data-cat-id="${cat?.id ?? ""}" ${pending || !cat ? "disabled" : ""}>${pending ? "Updating…" : "Equip"}</button>
-           <button type="button" class="ghost-button" data-card-mode="sell" ${tipAttr(`Sell instantly for <b>${item.sell_price}</b> coins`)}>Sell ${item.sell_price}</button>
+           <button type="button" class="ghost-button" data-card-mode="sell" ${tipAttr(`Sell instantly for <b>${item.sell_price}</b> coins`)}>Sell <span class="coin-dot" aria-hidden="true"></span>${item.sell_price}</button>
            <button type="button" class="ghost-button" data-card-mode="list" ${tipAttr("List on the marketplace for your own price")}>List</button>
          </div>
          <div class="card-sub" data-when="sell">
-           <p>Sell for <b>${item.sell_price}</b> coins?</p>
+           <p>Sell for <b class="price-inline"><span class="coin-dot" aria-hidden="true"></span>${item.sell_price}?</b></p>
            <div class="card-sub-row">
              <button type="button" class="primary-button" data-sell-confirm data-item-id="${item.id}">Sell</button>
              <button type="button" class="ghost-button" data-card-mode="">Back</button>
@@ -749,7 +749,7 @@ function renderInventoryList(
          </div>`;
 
     return `
-      <article class="inventory-card ${rarity}" data-mode="" ${tipAttr(itemTip(item, equipped ? `<div class="tip-sub">Compared with equipped ${escapeHtml(equipped.definition.name)}</div>` : ""))}>
+      <article class="inventory-card ${rarity}" data-card-state="" ${tipAttr(itemTip(item, equipped ? `<div class="tip-sub">Compared with equipped ${escapeHtml(equipped.definition.name)}</div>` : ""))}>
         <div class="inventory-card-top">
           <span class="slot-icon">${slotIcon(item.definition.slot)}</span>
           <div>

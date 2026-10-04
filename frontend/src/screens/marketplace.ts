@@ -128,8 +128,8 @@ export function mountMarketplace(root: HTMLElement, onInventoryChange: () => Pro
     if (modeButton) {
       const card = modeButton.closest<HTMLElement>(".inventory-card");
       if (card) {
-        card.dataset.mode = modeButton.dataset.cardMode ?? "";
-        if (card.dataset.mode === "list") card.querySelector<HTMLInputElement>("input")?.select();
+        card.dataset.cardState = modeButton.dataset.cardMode ?? "";
+        if (card.dataset.cardState === "list") card.querySelector<HTMLInputElement>("input")?.select();
       }
       return;
     }
