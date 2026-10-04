@@ -6,9 +6,9 @@ description; this file contains implementation detail and agent guidance.
 
 ## Current implementation state
 
-**Status:** Phase 1 player and cat persistence is complete; the Phase 2
-inventory/equipment backend foundation is now in place. Frontend inventory
-composition and visual overlays remain.
+**Status:** Phases 0–2 are complete and the deterministic PvE backend
+foundation is in place. The next active slice is the direct frontend fight
+flow plus persisted Dummy 1–3 progression.
 
 - [x] Product concept and MVP loop documented
 - [x] Sequential implementation phases defined
@@ -18,19 +18,24 @@ composition and visual overlays remain.
 - [x] Frontend scaffold
 - [x] Tiger Data connection and health check
 - [x] Player and cat persistence
-- [ ] Inventory and equipment
-- [ ] Deterministic PvE
+- [x] Inventory and equipment
+- [ ] Deterministic PvE (backend foundation complete; player progression/UI next)
 - [ ] Rewards and progression
 - [ ] Marketplace
 - [ ] Asynchronous PvP
 - [ ] Hackathon polish and analytics
 - [ ] Solana wallet and asset integration
 
-The independent backend and frontend shells now exist. Frontend production
-build and backend tests pass. The next implementation stage is the frontend
-completion of Phase 2: a single-page dashboard backed by the player and
-inventory APIs. Tiger Cloud remains optional during local development; do not
-skip ahead to Solana or real-time multiplayer.
+Completed implementation summary: the independent backend and frontend shells,
+SQLite-compatible local development path, development-player provisioning,
+player/cat persistence, starter inventory, authoritative equipment actions,
+computed stat overlays, persisted deterministic battle seeds/snapshots/events,
+and the initial default-dummy PvE API.
+
+Key decisions: SQLite is supported locally while Tiger Cloud remains optional;
+MVP identity is the unauthenticated `dev-player`; the frontend stays
+single-page; and the server remains authoritative for equipment, combat
+results, and future rewards.
 
 Current gameplay defaults are intentionally small: a development player named
 `dev-player`, one cat named Mochi with base stats `12/10/8` for
@@ -134,43 +139,25 @@ authoritative rewards or combat outcomes.
 
 ### Phase 0 — Foundation
 
-Backend/frontend manifests, environment loading, SQLAlchemy, Alembic, the
-health endpoint, Vite shell, and local commands are complete.
+Completed: backend/frontend manifests, environment loading, SQLAlchemy, Alembic,
+the health endpoint, Vite shell, and local commands.
 
 **Exit criteria:** Both services start and `/health` reports database status.
 
 ### Phase 1 — Player and cat
 
-Player/cat/currency tables, starter data, schemas, services, routes, and the
-validated stat model are complete. The frontend HUD is still placeholder-only.
+Completed: player/cat/currency persistence, starter data, schemas, services,
+routes, and the validated stat model. The development player is `dev-player`
+with Mochi, base stats `12/10/8`, and 125 coins.
 
 **Exit criteria:** A development player persists with the same cat and balance.
 
 ### Phase 2 — Items and equipment
 
-The backend foundation is complete: item definitions/instances, starter common
-and rare items, four slots, structured stat modifiers, ownership validation,
-and one equipped item per slot.
-
-The next stage completes Phase 2 on the frontend:
-
-1. On startup, call `POST /dev/player` and store the returned player ID in
-   browser storage. Reuse that ID for subsequent loads.
-2. Add separate API, state, rendering, and screen-composition modules.
-3. Build one responsive page containing the cat, computed stats, four equipment
-   slots, an arranged inventory, an enemy/NPC preview area, and a marketplace
-   area that can later become a live view.
-4. Use temporary CSS/Canvas placeholders for the cat and item visuals. Keep
-   backend `visual_key` values stable so real transparent PNGs can replace them.
-5. Display computed totals and bonuses, such as `ATK 15 (+3)`.
-6. Treat `equipped_cat_id` returned by the server as authoritative; refresh
-   inventory and stats after equip/unequip instead of relying on optimistic
-   client state.
-7. Include loading, empty, error, and pending-action states.
-
-**Exit criteria:** Equipping a valid owned item changes both stats and the
-placeholder visual composition, survives a refresh, and remains visible on the
-single-page dashboard.
+Completed: item definitions/instances, four slots, structured stat modifiers,
+starter gear, ownership validation, one equipped item per slot, and the
+single-page dashboard with inventory, equipment, stat overlays, placeholder
+visuals, and loading/error/pending states.
 
 ### Frontend product assumptions
 
@@ -181,8 +168,8 @@ single-page dashboard.
   design.
 - The page presents the player's cat as the primary focus, with inventory,
   equipment, marketplace access, and the current enemy/NPC in the same view.
-- The first enemy area is a placeholder for a future NPC and later PvP
-  opponent; it is not interactive until the battle phase.
+- The first enemy area is the current PvE opponent. It becomes interactive
+  through the direct Fight action; no replay system is needed.
 - The frontend automatically provisions the unauthenticated development player
   through `POST /dev/player` and stores the returned ID in browser storage.
 - Placeholder visuals are intentional for now; no art asset pipeline is
@@ -192,24 +179,30 @@ single-page dashboard.
 
 ### Phase 3 — Deterministic PvE
 
-1. Add enemy definitions and initial enemy seed data.
-2. Build a combat snapshot from cat and equipment.
-3. Generate and persist a battle seed.
-4. Resolve automatic turns in a backend combat service using registered
-   abilities/strategies for special cat and enemy behavior.
-5. Persist the winner and ordered battle events.
-6. Add the battle API and Canvas replay.
-7. Test damage, speed/turn order, victory, defeat, and edge cases.
+Backend foundation completed: a data-driven default training dummy, fixed-HP
+combat snapshots, speed-based deterministic resolution, persisted seeds and
+ordered battle events, and `POST /battles/pve` plus `GET /battles/{battle_id}`.
+No rewards are granted yet.
 
-Start with:
+The next slice implements the player-facing progression:
 
-```text
-damage = max(1, attacker_attack - defender_defense / 2)
-turn_interval = base_interval / speed_multiplier
-```
+1. Seed three ordered enemies: `Dummy 1`, `Dummy 2`, and `Dummy 3`, with
+   increasing stats and stable IDs that can be renamed later.
+2. Persist each player's current PvE enemy, starting at `Dummy 1`.
+3. Make the PvE endpoint fight the player's current enemy without accepting an
+   arbitrary enemy ID from the client.
+4. Advance to the next dummy only after a player win; retain the same dummy
+   after a loss or draw. Keep `Dummy 3` current after it is defeated.
+5. Add the dashboard Fight action. Show the server's completed result and
+   current enemy state directly; do not add battle replay.
+6. Keep rewards deferred. Wins advance progression only; losses and draws grant
+   neither rewards nor progression.
+7. Test roster seeding, per-player persistence, win advancement, loss/draw
+   retention, maximum progression, and authoritative result handling.
 
-**Exit criteria:** Identical snapshots and seeds always produce identical
-results. The client cannot select the winner or reward.
+**Exit criteria:** Refreshing preserves each player's current dummy, a win
+advances exactly one level, a loss/draw leaves the enemy unchanged, and the
+browser never computes the battle result or progression.
 
 ### Phase 4 — Rewards and progression
 
