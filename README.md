@@ -1,1 +1,133 @@
-# pixel-cat-arena
+# Pixel Cat Arena
+
+Pixel Cat Arena is a browser-based multiplayer game about building the best
+pixel-art cat. Players collect gear, customize their cat, fight quick
+automatic battles, and trade equipment with other players.
+
+The game is designed for a simple, satisfying loop:
+
+```text
+fight → earn currency and gear → improve your cat → trade → fight stronger opponents
+```
+
+It targets the **Game**, **Python**, and **Solana** hackathon tracks. The first
+playable version is deliberately off-chain so the game can be made fun and
+reliable quickly. Solana ownership and wallet features are added only after the
+local game loop is complete.
+
+## What the player does
+
+### Build a unique cat
+
+Every player starts with one cat. The cat is rendered from a shared base sprite
+and transparent pixel-art equipment layers, so a small art set can create many
+different looks.
+
+Players can equip one item in each slot:
+
+- **Head** — helmets, hats, crowns, and other visual modifiers
+- **Body** — armor, robes, jackets, and defensive gear
+- **Weapon** — swords, wands, claws, and offensive gear
+- **Accessory** — capes, charms, shields, and stat-boosting extras
+
+Items have a rarity and three simple stats: **Attack**, **Defense**, and
+**Speed**. Common gear is accessible and reliable; rare gear is more powerful
+and desirable in the marketplace.
+
+### Fight automatic battles
+
+Battles are short PvE encounters against enemies with different stats and
+difficulty levels. The backend calculates the result, while the browser
+animates the battle:
+
+1. The server snapshots the cat's equipment and stats.
+2. A deterministic battle seed controls turn order and random events.
+3. The fighters attack automatically until one wins.
+4. The server stores the result and awards the reward.
+5. The client replays the event log as a compact Canvas animation.
+
+This keeps combat fair, replayable, and easy to extend to asynchronous PvP.
+
+### Earn, equip, and trade
+
+Victories provide in-game currency and a chance to find new gear. Players can
+compare item stats in their inventory, equip upgrades, and list unwanted gear
+on the marketplace. Other players can browse listings and buy items using
+in-game currency.
+
+Marketplace purchases are handled as atomic PostgreSQL transactions, preventing
+double purchases, duplicated items, and negative balances.
+
+### Challenge saved builds
+
+After PvE and the marketplace are working, players can publish a saved build.
+Other players can challenge that build while its owner is offline. Both sides
+use the same deterministic combat service, so asynchronous PvP adds
+competition without requiring real-time networking.
+
+## What the app looks like
+
+Pixel Cat Arena should feel like a compact pixel-art game dashboard rather than
+a large administration app:
+
+```text
+┌─────────────────────────────────────────────────────────────────────┐
+│ PIXEL CAT ARENA              125 coins       Inventory  Marketplace │
+├───────────────────────────────┬─────────────────────────────────────┤
+│                               │  EQUIPMENT                          │
+│          [pixel cat]           │  Head:      Wizard Hat   +2 SPD     │
+│                               │  Body:      Iron Armor   +4 DEF     │
+│       HP 100 / 100             │  Weapon:    Pixel Sword  +5 ATK    │
+│       ATK 18  DEF 12  SPD 9    │  Accessory: Lucky Charm +1 ATK     │
+│                               │                                     │
+│       [FIGHT A BATTLE]         │  [INVENTORY] [MARKETPLACE]         │
+└───────────────────────────────┴─────────────────────────────────────┘
+```
+
+The main screens are:
+
+- **Arena:** the cat, current stats, enemy preview, and fight button
+- **Battle view:** two pixel fighters, health bars, event messages, and reward
+- **Inventory:** item cards with rarity, stats, ownership, and equip actions
+- **Marketplace:** searchable listings with slot, rarity, price, and purchase
+  action
+- **Profile:** cat progression, battle history, published build, and later
+  wallet information
+
+The visual style should use crisp nearest-neighbor pixel art, a limited bright
+color palette, chunky borders, readable stat badges, and lightweight
+animations. Gear is composited in a fixed order:
+
+```text
+base cat → body → accessory → head → weapon
+```
+
+## Technology
+
+- **Frontend:** TypeScript, Vite, HTML/CSS, and Canvas 2D
+- **Backend:** Python 3.12 and FastAPI
+- **Database:** Tiger Data / Tiger Cloud PostgreSQL
+- **Persistence:** SQLAlchemy 2 and Alembic migrations
+- **Testing:** Pytest for API and game rules; Vitest for frontend utilities
+- **Blockchain:** Solana wallet and asset support in a later phase
+
+Tiger Data provides a managed PostgreSQL foundation with standard SQL, which
+keeps the hackathon setup small while leaving room for fast battle history,
+marketplace queries, and time-series gameplay analytics.
+
+## MVP
+
+The first complete version lets a player create a development account, receive
+a starter cat, equip gear, fight PvE, earn persistent rewards, and buy or sell
+items. Combat, inventory ownership, rewards, and marketplace transfers are
+server-authoritative and stored in Tiger Data.
+
+The detailed sequential build plan, schema, API slices, technical decisions,
+and current implementation status live in [`AGENTS.md`](AGENTS.md).
+
+## Project status
+
+The repository currently contains independent frontend and backend Phase 0
+scaffolds. Configure `DATABASE_URL`, install each app's dependencies, and run
+the health check before beginning player and cat persistence. The detailed
+implementation state is tracked in [`AGENTS.md`](AGENTS.md).
