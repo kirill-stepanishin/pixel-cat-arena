@@ -1,7 +1,7 @@
 import { claimItemNft, getClaimableItems, mintItemNft } from "../api/gameApi";
 import { claimMessage, isPhantomInstalled, signWithPhantom } from "../solana/phantom";
 import type { ItemInstanceRead } from "../types";
-import { escapeHtml, itemTip, slotIcon, statChips, tipAttr, toast } from "./ui";
+import { escapeHtml, itemTip, slotIcon, tipAttr, toast } from "./ui";
 
 const EXPLORER_BASE = "https://explorer.solana.com/address";
 
@@ -19,20 +19,14 @@ export function solanaMarkup(): string {
       <div class="panel-header compact">
         <div>
           <p class="eyebrow">⛓ SOLANA (DEVNET)</p>
-          <h3>Claim on-chain items</h3>
+          <h3>Claim on-chain items <span class="info-hint" ${tipAttr("Legendary gear exported to Solana can be traded wallet-to-wallet outside the game. Paste a devnet wallet address to see what it holds, then claim an item back into your account with a free signature — no transaction, no fees.")}>ⓘ</span></h3>
         </div>
       </div>
-      <p class="market-hint">
-        Legendary gear exported to Solana can be traded wallet-to-wallet outside the game.
-        Paste a devnet wallet address to see what it currently holds, then claim an item back
-        into your account — claiming proves you control the wallet with a free signature, no
-        transaction or fees.
-      </p>
       <div class="solana-lookup">
         <input type="text" id="solana-wallet" placeholder="Devnet wallet address" aria-label="Wallet address to check" />
         <button type="button" class="ghost-button" id="solana-check">Check wallet</button>
       </div>
-      <div class="market-listings" id="solana-claimable"></div>
+      <div class="solana-claimable" id="solana-claimable"></div>
     </section>`;
 }
 
@@ -41,24 +35,15 @@ function claimableCard(item: ItemInstanceRead): string {
   const busy = busyMintAddress === item.solana_mint_address;
   const mint = item.solana_mint_address ?? "";
   return `
-    <article class="listing-card rarity-card-${rarity}" ${tipAttr(itemTip(item))}>
-      <div class="inventory-card-top">
-        <span class="slot-icon">${slotIcon(item.definition.slot)}</span>
-        <div>
-          <strong class="rarity-${rarity}">${escapeHtml(item.definition.name)}</strong>
-          <span>${item.definition.slot} · ${rarity}</span>
-        </div>
+    <article class="solana-claim-row rarity-card-${rarity}" ${tipAttr(itemTip(item))}>
+      <span class="slot-icon">${slotIcon(item.definition.slot)}</span>
+      <div class="solana-claim-info">
+        <strong class="rarity-${rarity}">${escapeHtml(item.definition.name)}</strong>
+        <a href="${solanaExplorerUrl(mint)}" target="_blank" rel="noopener">Explorer ↗</a>
       </div>
-      <div class="stat-chips">${statChips(item)}</div>
-      <p class="listing-seller">
-        <a href="${solanaExplorerUrl(mint)}" target="_blank" rel="noopener">View mint on Explorer ↗</a>
-      </p>
-      <div class="listing-foot">
-        <span></span>
-        <button type="button" class="primary-button" data-claim-mint="${mint}" ${busy ? "disabled" : ""}>
-          ${busy ? "Claiming…" : "Claim"}
-        </button>
-      </div>
+      <button type="button" class="primary-button" data-claim-mint="${mint}" ${busy ? "disabled" : ""}>
+        ${busy ? "Claiming…" : "Claim"}
+      </button>
     </article>`;
 }
 

@@ -823,7 +823,7 @@ function renderInventoryList(
            ${equipButton}
            <button type="button" class="ghost-button" data-card-mode="sell" ${tipAttr(`Sell instantly for <b>${item.sell_price}</b> coins`)}>Sell <span class="coin-dot" aria-hidden="true"></span>${item.sell_price}</button>
            <button type="button" class="ghost-button" data-card-mode="list" ${tipAttr("List on the marketplace for your own price")}>List</button>
-           ${exportable ? `<button type="button" class="ghost-button" data-card-mode="export" ${tipAttr("Mint as a real Solana NFT. Stays equippable, but can no longer be sold or listed in-game.")}>⛓ Export</button>` : ""}
+           ${exportable ? `<button type="button" class="ghost-button" data-card-mode="export" ${tipAttr("Mint as a real Solana devnet NFT, sent to a wallet address you choose. Stays equippable in battle, but can never be sold or listed in-game again — trade moves on-chain instead.")}>⛓ Export</button>` : ""}
          </div>
          <div class="card-sub" data-when="sell">
            <p>Sell for <b class="price-inline"><span class="coin-dot" aria-hidden="true"></span>${item.sell_price}?</b></p>
@@ -840,8 +840,7 @@ function renderInventoryList(
            </div>
          </div>
          ${exportable ? `<div class="card-sub" data-when="export">
-           <p>Mint on Solana devnet. It stays equippable, but can never be sold or listed in-game again — trade moves on-chain.</p>
-           <input type="text" data-export-wallet placeholder="Devnet wallet address" aria-label="Wallet address to receive the NFT" />
+           <input type="text" data-export-wallet placeholder="Devnet wallet address" aria-label="Wallet address to receive the NFT" ${tipAttr("Mints on Solana devnet to this address. No resale/listing in-game afterward — trade moves on-chain.")} />
            <div class="card-sub-row">
              <button type="button" class="primary-button" data-export-confirm data-item-id="${item.id}">Mint</button>
              <button type="button" class="ghost-button" data-card-mode="">Back</button>

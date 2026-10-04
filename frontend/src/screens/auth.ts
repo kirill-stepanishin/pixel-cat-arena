@@ -4,17 +4,18 @@ export function mountAuth(root: HTMLElement, onAuthenticated: () => void): void 
   root.innerHTML = `
     <main class="auth-shell">
       <section class="panel auth-panel">
+        <div class="auth-mascot" aria-hidden="true">🐱</div>
         <p class="eyebrow">PIXEL CAT ARENA</p>
         <h1>Enter the arena</h1>
         <p class="auth-copy">Create a local account or sign in to your cat.</p>
         <form id="auth-form">
-          <label>Username<input name="username" minlength="3" maxlength="50" required autocomplete="username"></label>
-          <label>Password<input name="password" type="password" minlength="8" maxlength="128" required autocomplete="current-password"></label>
+          <label>Username<input name="username" minlength="3" maxlength="50" required autocomplete="username" placeholder="e.g. mochi_tamer"></label>
+          <label>Password<input name="password" type="password" minlength="8" maxlength="128" required autocomplete="current-password" placeholder="At least 8 characters"></label>
+          <p id="auth-error" class="error-message" aria-live="polite"></p>
           <div class="auth-actions">
             <button class="primary-button" type="submit" data-auth-mode="login">Log in</button>
             <button class="ghost-button" type="button" data-auth-mode="register">Create account</button>
           </div>
-          <p id="auth-error" class="error-message" aria-live="polite"></p>
         </form>
       </section>
     </main>
