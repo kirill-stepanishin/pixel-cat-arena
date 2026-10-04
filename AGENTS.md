@@ -6,9 +6,8 @@ description; this file contains implementation detail and agent guidance.
 
 ## Current implementation state
 
-**Status:** Phases 0–2 are complete and the deterministic PvE backend
-foundation is in place. The next active slice is the direct frontend fight
-flow plus persisted Dummy 1–3 progression.
+**Status:** Phases 0–3 are complete. The next active slice is transactional
+rewards and progression after a PvE win.
 
 - [x] Product concept and MVP loop documented
 - [x] Sequential implementation phases defined
@@ -19,7 +18,7 @@ flow plus persisted Dummy 1–3 progression.
 - [x] Tiger Data connection and health check
 - [x] Player and cat persistence
 - [x] Inventory and equipment
-- [ ] Deterministic PvE (backend foundation complete; player progression/UI next)
+- [x] Deterministic PvE
 - [ ] Rewards and progression
 - [ ] Marketplace
 - [ ] Asynchronous PvP
@@ -30,7 +29,9 @@ Completed implementation summary: the independent backend and frontend shells,
 SQLite-compatible local development path, development-player provisioning,
 player/cat persistence, starter inventory, authoritative equipment actions,
 computed stat overlays, persisted deterministic battle seeds/snapshots/events,
-and the initial default-dummy PvE API.
+per-player Dummy 1–3 progression, and the direct Fight dashboard flow.
+The Fight action also resets its pending state after successful or failed
+requests so the control remains usable.
 
 Key decisions: SQLite is supported locally while Tiger Cloud remains optional;
 MVP identity is the unauthenticated `dev-player`; the frontend stays
@@ -179,12 +180,14 @@ visuals, and loading/error/pending states.
 
 ### Phase 3 — Deterministic PvE
 
-Backend foundation completed: a data-driven default training dummy, fixed-HP
-combat snapshots, speed-based deterministic resolution, persisted seeds and
-ordered battle events, and `POST /battles/pve` plus `GET /battles/{battle_id}`.
-No rewards are granted yet.
+Completed: a data-driven Dummy 1–3 roster, fixed-HP combat snapshots,
+speed-based deterministic resolution, persisted seeds and ordered battle
+events, per-player current-enemy persistence, and
+`POST /battles/pve` plus `GET /battles/{battle_id}`. The dashboard directly
+starts fights, displays authoritative results, advances the roster after wins,
+and keeps the Fight control usable after completion. No rewards are granted.
 
-The next slice implements the player-facing progression:
+The player-facing progression slice is complete:
 
 1. Seed three ordered enemies: `Dummy 1`, `Dummy 2`, and `Dummy 3`, with
    increasing stats and stable IDs that can be renamed later.
@@ -202,15 +205,19 @@ The next slice implements the player-facing progression:
 
 **Exit criteria:** Refreshing preserves each player's current dummy, a win
 advances exactly one level, a loss/draw leaves the enemy unchanged, and the
-browser never computes the battle result or progression.
+browser never computes the battle result or progression. Complete.
 
 ### Phase 4 — Rewards and progression
 
+Next active phase:
+
 1. Add reward and item-drop definitions.
-2. Award currency and items transactionally after wins.
-3. Add idempotency protection for reward claims.
-4. Add cat experience and a minimal level display if time allows.
-5. Add battle and reward history.
+2. Award currency and items transactionally after wins; draws and losses award
+   nothing.
+3. Add idempotency protection so a battle cannot be rewarded twice.
+4. Add a minimal reward response and dashboard notification.
+5. Add cat experience and a minimal level display if time allows.
+6. Add battle and reward history.
 
 **Exit criteria:** A win produces one persistent reward, which can be equipped
 and used in a later battle.

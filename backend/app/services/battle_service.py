@@ -12,25 +12,39 @@ from app.models.battle import Battle, BattleEvent, Enemy
 from app.models.item import ItemInstance
 from app.models.player import Player
 
-DEFAULT_ENEMY = {
-    "id": "training-dummy",
-    "name": "Training Dummy",
-    "visual_key": "training-dummy",
-    "attack": 7,
-    "defense": 8,
-    "speed": 6,
-}
+ENEMY_DEFINITIONS = (
+    {"id": "dummy-1", "name": "Dummy 1", "visual_key": "dummy-1", "attack": 7, "defense": 8, "speed": 6},
+    {"id": "dummy-2", "name": "Dummy 2", "visual_key": "dummy-2", "attack": 11, "defense": 12, "speed": 7},
+    {"id": "dummy-3", "name": "Dummy 3", "visual_key": "dummy-3", "attack": 15, "defense": 16, "speed": 8},
+)
 MAX_TURNS = 100
 MAX_HP = 100
 
 
-async def ensure_default_enemy(session: AsyncSession) -> Enemy:
-    enemy = await session.get(Enemy, DEFAULT_ENEMY["id"])
-    if enemy is None:
-        enemy = Enemy(**DEFAULT_ENEMY)
-        session.add(enemy)
+async def ensure_enemy_roster(session: AsyncSession) -> list[Enemy]:
+    result = await session.execute(select(Enemy).where(Enemy.id.in_([item["id"] for item in ENEMY_DEFINITIONS])))
+    existing = {enemy.id: enemy for enemy in result.scalars().all()}
+    missing = [
+        Enemy(**definition)
+        for definition in ENEMY_DEFINITIONS
+        if definition["id"] not in existing
+    ]
+    if missing:
+        session.add_all(missing)
         await session.flush()
-    return enemy
+        existing.update({enemy.id: enemy for enemy in missing})
+    return [existing[definition["id"]] for definition in ENEMY_DEFINITIONS]
+
+
+async def get_current_enemy(session: AsyncSession, player_id: str) -> Enemy | None:
+    player = await session.get(Player, player_id, with_for_update=True)
+    if player is None:
+        return None
+    roster = await ensure_enemy_roster(session)
+    if player.current_enemy_id not in {enemy.id for enemy in roster}:
+        player.current_enemy_id = roster[0].id
+        await session.flush()
+    return next(enemy for enemy in roster if enemy.id == player.current_enemy_id)
 
 
 async def create_pve_battle(
@@ -51,7 +65,12 @@ async def create_pve_battle(
     if player is None or not player.cats:
         return None
 
-    enemy = await ensure_default_enemy(session)
+    player = await session.get(Player, player_id, with_for_update=True)
+    if player is None:
+        return None
+    enemy = await get_current_enemy(session, player_id)
+    if enemy is None:
+        return None
     cat = player.cats[0]
     equipped_items = [item for item in player.items if item.equipped_cat_id == cat.id]
     modifiers = {
@@ -89,6 +108,10 @@ async def create_pve_battle(
         events=[BattleEvent(**event) for event in events],
     )
     session.add(battle)
+    if result == "player":
+        roster = await ensure_enemy_roster(session)
+        current_index = next(index for index, item in enumerate(roster) if item.id == enemy.id)
+        player.current_enemy_id = roster[min(current_index + 1, len(roster) - 1)].id
     await session.flush()
     await session.refresh(battle, attribute_names=["events"])
     return battle

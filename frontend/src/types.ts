@@ -56,3 +56,24 @@ export interface PlayerWithDetails extends PlayerRead {
   cats: CatRead[];
   currencies: CurrencyRead[];
 }
+
+export interface EnemyRead {
+  id: string;
+  name: string;
+  visual_key: string;
+  attack: number;
+  defense: number;
+  speed: number;
+}
+
+export interface BattleRead {
+  id: string;
+  result: "player" | "enemy" | "draw";
+  enemy_snapshot: {
+    name: string;
+    attack: number;
+    defense: number;
+    speed: number;
+    max_hp: number;
+  };
+}

@@ -1,4 +1,5 @@
 import asyncio
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -10,6 +11,7 @@ from app.services.battle_service import MAX_TURNS, resolve_battle
 
 
 def _build_session_factory() -> async_sessionmaker:
+    Path("test_battle_flow.db").unlink(missing_ok=True)
     engine = create_async_engine("sqlite+aiosqlite:///./test_battle_flow.db")
 
     async def initialize() -> None:
@@ -81,7 +83,7 @@ def test_pve_endpoint_persists_battle_and_events(monkeypatch) -> None:
 
     assert response.status_code == 200
     battle = response.json()
-    assert battle["enemy_id"] == "training-dummy"
+    assert battle["enemy_id"] == "dummy-1"
     assert battle["player_snapshot"]["max_hp"] == 100
     assert battle["enemy_snapshot"]["max_hp"] == 100
     assert battle["events"]
@@ -89,6 +91,38 @@ def test_pve_endpoint_persists_battle_and_events(monkeypatch) -> None:
     lookup = client.get(f"/battles/{battle['id']}")
     assert lookup.status_code == 200
     assert lookup.json()["seed"] == battle["seed"]
+
+
+def test_current_enemy_is_persisted_and_advances_after_a_win(monkeypatch) -> None:
+    monkeypatch.setattr(db, "session_factory", _build_session_factory())
+    client = TestClient(app)
+    player = client.post("/dev/player").json()
+
+    current = client.get(f"/battles/pve/current/{player['id']}")
+    assert current.json()["id"] == "dummy-1"
+
+    battle_service = __import__("app.services.battle_service", fromlist=["create_pve_battle"])
+    original_resolver = battle_service.resolve_battle
+    monkeypatch.setattr(
+        battle_service,
+        "resolve_battle",
+        lambda player, enemy, seed: ("player", [{
+            "sequence": 1,
+            "turn_number": 1,
+            "event_type": "victory",
+            "attacker": "player",
+            "damage": 0,
+            "player_hp": 100,
+            "enemy_hp": 0,
+            "elapsed_time": 0,
+        }]),
+    )
+    try:
+        assert client.post("/battles/pve", json={"player_id": player["id"]}).status_code == 200
+    finally:
+        monkeypatch.setattr(battle_service, "resolve_battle", original_resolver)
+
+    assert client.get(f"/battles/pve/current/{player['id']}").json()["id"] == "dummy-2"
 
 
 def test_pve_rejects_unknown_player(monkeypatch) -> None:

@@ -359,6 +359,22 @@ h1 {
   color: #d3bfef;
 }
 
+.fight-button {
+  width: 100%;
+  margin-top: 1rem;
+}
+
+.battle-result {
+  min-height: 1.4rem;
+  margin-top: 0.8rem;
+  color: #f6d67b;
+  font-weight: 700;
+}
+
+.battle-result[data-result="enemy"] {
+  color: #ff9a9a;
+}
+
 .marketplace-panel {
   margin-top: 1.25rem;
 }

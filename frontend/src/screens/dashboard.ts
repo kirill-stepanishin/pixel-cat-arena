@@ -1,7 +1,14 @@
-import { ensureDevPlayer, equipItem, getInventory, unequipItem } from "../api/gameApi";
+import {
+  ensureDevPlayer,
+  equipItem,
+  fightPve,
+  getCurrentEnemy,
+  getInventory,
+  unequipItem,
+} from "../api/gameApi";
 import { renderGlyph } from "../rendering/placeholders";
 import { getEquippedItemsForCat, SLOT_ORDER, sumBonusForStat } from "../state/playerState";
-import type { ItemInstanceRead, PlayerWithDetails, SlotKey, StatKey } from "../types";
+import type { EnemyRead, ItemInstanceRead, PlayerWithDetails, SlotKey, StatKey } from "../types";
 
 const STAT_ORDER: Array<{ key: StatKey; label: string }> = [
   { key: "attack", label: "ATK" },
@@ -65,17 +72,19 @@ export function mountDashboard(root: HTMLElement): void {
           <div class="panel-header compact">
             <div>
               <p class="eyebrow">ENEMY</p>
-              <h3>Training dummy</h3>
+              <h3 id="enemy-name">Loading enemy…</h3>
             </div>
           </div>
           <div class="enemy-figure" aria-hidden="true">
             <div class="enemy-body">◉</div>
           </div>
           <ul class="enemy-stats">
-            <li>ATK 7</li>
-            <li>DEF 8</li>
-            <li>SPD 6</li>
+            <li id="enemy-attack">ATK --</li>
+            <li id="enemy-defense">DEF --</li>
+            <li id="enemy-speed">SPD --</li>
           </ul>
+          <button type="button" class="primary-button fight-button" data-action="fight">Fight</button>
+          <div id="battle-result" class="battle-result" aria-live="polite"></div>
         </aside>
       </div>
 
@@ -116,7 +125,26 @@ export function mountDashboard(root: HTMLElement): void {
 
     const { action, itemId, playerId, catId } = actionButton.dataset;
 
-    if (!action || !itemId || !playerId || !catId) {
+    if (!action) {
+      return;
+    }
+
+    if (action === "fight") {
+      const player = await ensureDevPlayer();
+      setFightButtonState(root, true);
+      try {
+        const battle = await fightPve(player.id);
+        showBattleResult(root, battle.result);
+        await refreshDashboard(root, null);
+        setFightButtonState(root, false);
+      } catch (error) {
+        showError(root, error instanceof Error ? error.message : "Could not start battle.");
+        setFightButtonState(root, false);
+      }
+      return;
+    }
+
+    if (!itemId || !playerId || !catId) {
       return;
     }
 
@@ -153,9 +181,12 @@ async function refreshDashboard(root: HTMLElement, pendingActionId: string | nul
 
   try {
     const player = await ensureDevPlayer();
-    const inventory = await getInventory(player.id);
+    const [inventory, currentEnemy] = await Promise.all([
+      getInventory(player.id),
+      getCurrentEnemy(player.id),
+    ]);
 
-    renderPlayerView(root, player, inventory, pendingActionId);
+    renderPlayerView(root, player, inventory, currentEnemy, pendingActionId);
 
     if (playerTagElement) {
       playerTagElement.textContent = `Player ${player.username}`;
@@ -183,6 +214,7 @@ function renderPlayerView(
   root: HTMLElement,
   player: PlayerWithDetails,
   inventory: ItemInstanceRead[],
+  currentEnemy: EnemyRead,
   pendingActionId: string | null,
 ): void {
   const cat = player.cats[0] ?? null;
@@ -190,6 +222,15 @@ function renderPlayerView(
   const statGrid = root.querySelector<HTMLElement>("#stat-grid");
   const catNameElement = root.querySelector<HTMLElement>("#cat-name");
   const coinsBadge = root.querySelector<HTMLElement>("#coins-badge");
+  const enemyName = root.querySelector<HTMLElement>("#enemy-name");
+  const enemyAttack = root.querySelector<HTMLElement>("#enemy-attack");
+  const enemyDefense = root.querySelector<HTMLElement>("#enemy-defense");
+  const enemySpeed = root.querySelector<HTMLElement>("#enemy-speed");
+
+  if (enemyName) enemyName.textContent = currentEnemy.name;
+  if (enemyAttack) enemyAttack.textContent = `ATK ${currentEnemy.attack}`;
+  if (enemyDefense) enemyDefense.textContent = `DEF ${currentEnemy.defense}`;
+  if (enemySpeed) enemySpeed.textContent = `SPD ${currentEnemy.speed}`;
 
   if (catNameElement) {
     catNameElement.textContent = cat?.name ?? "No cat yet";
@@ -350,4 +391,22 @@ function showError(root: HTMLElement, message: string): void {
   if (errorElement) {
     errorElement.textContent = message;
   }
+}
+
+function showBattleResult(root: HTMLElement, result: "player" | "enemy" | "draw"): void {
+  const resultElement = root.querySelector<HTMLElement>("#battle-result");
+  if (!resultElement) return;
+  resultElement.textContent =
+    result === "player" ? "Victory! The next dummy is ready." :
+    result === "enemy" ? "Defeat. Try again against the same dummy." :
+    "Draw. The current dummy remains.";
+  resultElement.dataset.result = result;
+}
+
+function setFightButtonState(root: HTMLElement, pending: boolean): void {
+  const fightButton = root.querySelector<HTMLButtonElement>('[data-action="fight"]');
+  if (!fightButton) return;
+
+  fightButton.disabled = pending;
+  fightButton.textContent = pending ? "Fighting…" : "Fight";
 }

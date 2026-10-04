@@ -8,6 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 
 if TYPE_CHECKING:
+    from app.models.battle import Enemy
     from app.models.item import ItemInstance
 
 
@@ -32,6 +33,11 @@ class Player(Base):
         onupdate=func.now(),
         nullable=False,
     )
+    current_enemy_id: Mapped[str | None] = mapped_column(
+        ForeignKey("enemies.id"),
+        nullable=True,
+        index=True,
+    )
 
     cats: Mapped[list["Cat"]] = relationship(
         back_populates="player",
@@ -45,6 +51,7 @@ class Player(Base):
         back_populates="owner",
         cascade="all, delete-orphan",
     )
+    current_enemy: Mapped["Enemy | None"] = relationship()
 
 
 class Cat(Base):

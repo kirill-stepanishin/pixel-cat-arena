@@ -6,8 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
-from app.schemas.battle import BattleRead, PveBattleCreate
-from app.services.battle_service import create_pve_battle, get_battle
+from app.schemas.battle import BattleRead, EnemyRead, PveBattleCreate
+from app.services.battle_service import create_pve_battle, get_battle, get_current_enemy
 
 router = APIRouter(prefix="/battles", tags=["battles"])
 
@@ -25,6 +25,18 @@ async def create_pve(
         )
     await session.commit()
     return BattleRead.model_validate(battle)
+
+
+@router.get("/pve/current/{player_id}", response_model=EnemyRead)
+async def read_current_enemy(
+    player_id: str,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> EnemyRead:
+    enemy = await get_current_enemy(session, player_id)
+    if enemy is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="player not found")
+    await session.commit()
+    return EnemyRead.model_validate(enemy)
 
 
 @router.get("/{battle_id}", response_model=BattleRead)

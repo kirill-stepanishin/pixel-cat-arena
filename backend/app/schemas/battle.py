@@ -10,6 +10,17 @@ class PveBattleCreate(BaseModel):
     player_id: str = Field(min_length=1)
 
 
+class EnemyRead(BaseModel):
+    id: str
+    name: str
+    visual_key: str
+    attack: int
+    defense: int
+    speed: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class CombatantSnapshot(BaseModel):
     name: str
     attack: int
